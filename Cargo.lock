@@ -175,6 +175,7 @@ dependencies = [
  "embedded-graphics-simulator",
  "heapless",
  "line_drawing",
+ "load_stl",
  "log",
  "nalgebra",
 ]

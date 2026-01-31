@@ -1,15 +1,17 @@
 use core::fmt::Write;
 use heapless::String;
 
-#[cfg(all(not(test), not(feature = "std")))]
+// Use embassy_time for embedded targets when the feature is enabled
+#[cfg(feature = "embassy-time")]
 use embassy_time::Instant;
 
-#[cfg(all(not(test), not(feature = "std")))]
+#[cfg(feature = "embassy-time")]
 fn now_us() -> u64 {
     Instant::now().as_micros() as u64
 }
 
-#[cfg(any(test, feature = "std"))]
+// Use std::time for desktop/simulator targets or when embassy-time is not enabled
+#[cfg(not(feature = "embassy-time"))]
 fn now_us() -> u64 {
     extern crate std;
     use std::time::{SystemTime, UNIX_EPOCH};

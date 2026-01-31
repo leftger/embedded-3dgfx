@@ -210,6 +210,7 @@ pub fn draw_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::
     }
 }
 
+#[inline(always)]
 fn fill_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
     p1: nalgebra::Point2<i32>,
     p2: nalgebra::Point2<i32>,
@@ -253,6 +254,7 @@ fn fill_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelco
     }
 }
 
+#[inline(always)]
 fn fill_bottom_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
     p1: Point,
     p2: Point,
@@ -267,21 +269,36 @@ fn fill_bottom_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_c
 ) where
     <D as DrawTarget>::Error: Debug,
 {
-    let invslope1 = (p2.x - p1.x) as f32 / (p2.y - p1.y) as f32;
-    let invslope2 = (p3.x - p1.x) as f32 / (p3.y - p1.y) as f32;
+    let height = p2.y - p1.y;
+    if height == 0 {
+        return;
+    }
 
-    let mut curx1 = p1.x as f32;
-    let mut curx2 = p1.x as f32;
+    // Use fixed-point arithmetic (16.16 format) for edge slopes
+    // This avoids floating-point operations entirely
+    let invslope1 = ((p2.x - p1.x) << 16) / height;
+    let invslope2 = ((p3.x - p1.x) << 16) / height;
+
+    let mut curx1 = p1.x << 16; // Fixed-point
+    let mut curx2 = p1.x << 16; // Fixed-point
 
     for scanline_y in p1.y..=p2.y {
-        let t = (scanline_y - p1.y) as f32 / (p2.y - p1.y) as f32;
-        // Integer interpolation for Z
-        let z_left = (z1 as i64 + (t * (z2 as i64 - z1 as i64) as f32) as i64) as u32;
-        let z_right = (z1 as i64 + (t * (z3 as i64 - z1 as i64) as f32) as i64) as u32;
+        let dy = scanline_y - p1.y;
+        // Integer interpolation for Z using only integer math
+        let z_left = if height > 0 {
+            (z1 as i64 + ((z2 as i64 - z1 as i64) * dy as i64 / height as i64)) as u32
+        } else {
+            z1
+        };
+        let z_right = if height > 0 {
+            (z1 as i64 + ((z3 as i64 - z1 as i64) * dy as i64 / height as i64)) as u32
+        } else {
+            z1
+        };
 
         draw_scanline_zbuffered(
-            curx1 as i32,
-            curx2 as i32,
+            curx1 >> 16, // Convert back from fixed-point
+            curx2 >> 16, // Convert back from fixed-point
             scanline_y,
             z_left,
             z_right,
@@ -296,6 +313,7 @@ fn fill_bottom_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_c
     }
 }
 
+#[inline(always)]
 fn fill_top_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
     p1: Point,
     p2: Point,
@@ -310,21 +328,35 @@ fn fill_top_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core
 ) where
     <D as DrawTarget>::Error: Debug,
 {
-    let invslope1 = (p3.x - p1.x) as f32 / (p3.y - p1.y) as f32;
-    let invslope2 = (p3.x - p2.x) as f32 / (p3.y - p2.y) as f32;
+    let height = p3.y - p1.y;
+    if height == 0 {
+        return;
+    }
 
-    let mut curx1 = p3.x as f32;
-    let mut curx2 = p3.x as f32;
+    // Use fixed-point arithmetic (16.16 format) for edge slopes
+    let invslope1 = ((p3.x - p1.x) << 16) / height;
+    let invslope2 = ((p3.x - p2.x) << 16) / height;
+
+    let mut curx1 = p3.x << 16; // Fixed-point
+    let mut curx2 = p3.x << 16; // Fixed-point
 
     for scanline_y in (p1.y..=p3.y).rev() {
-        let t = (scanline_y - p1.y) as f32 / (p3.y - p1.y) as f32;
-        // Integer interpolation for Z
-        let z_left = (z1 as i64 + (t * (z3 as i64 - z1 as i64) as f32) as i64) as u32;
-        let z_right = (z2 as i64 + (t * (z3 as i64 - z2 as i64) as f32) as i64) as u32;
+        let dy = scanline_y - p1.y;
+        // Integer interpolation for Z using only integer math
+        let z_left = if height > 0 {
+            (z1 as i64 + ((z3 as i64 - z1 as i64) * dy as i64 / height as i64)) as u32
+        } else {
+            z1
+        };
+        let z_right = if height > 0 {
+            (z2 as i64 + ((z3 as i64 - z2 as i64) * dy as i64 / height as i64)) as u32
+        } else {
+            z2
+        };
 
         draw_scanline_zbuffered(
-            curx1 as i32,
-            curx2 as i32,
+            curx1 >> 16, // Convert back from fixed-point
+            curx2 >> 16, // Convert back from fixed-point
             scanline_y,
             z_left,
             z_right,
@@ -339,6 +371,7 @@ fn fill_top_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core
     }
 }
 
+#[inline(always)]
 fn draw_scanline_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
     x1: i32,
     x2: i32,

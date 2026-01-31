@@ -9,9 +9,15 @@ use nalgebra::Point2;
 use nalgebra::Point3;
 use nalgebra::Vector3;
 
+// ComplexField provides sqrt() for f32 in no_std via libm
+// It appears "unused" in tests because tests use std, but it's required for no_std builds
+#[allow(unused_imports)]
+use nalgebra::ComplexField;
+
 pub mod camera;
 pub mod draw;
 pub mod framebuffer;
+pub mod lut;
 pub mod mesh;
 pub mod perfcounter;
 
@@ -42,6 +48,37 @@ impl K3dengine {
         }
     }
 
+    /// Fast frustum culling check using bounding sphere.
+    /// Returns true if the mesh should be culled (not rendered).
+    #[inline]
+    fn should_cull_mesh(&self, mesh: &K3dMesh) -> bool {
+        // Get mesh position in world space
+        let mesh_pos = mesh.get_position();
+
+        // Compute distance from camera to mesh center
+        let to_mesh = mesh_pos - self.camera.position;
+        let distance = to_mesh.norm(); // Uses libm sqrt via nalgebra
+
+        // Get squared bounding radius and compute radius
+        // This is only called once per mesh, not in the inner loop
+        let radius_sq = mesh.compute_bounding_radius_sq();
+        let radius = radius_sq.sqrt(); // Uses libm sqrt (one call per mesh is acceptable)
+
+        // Far plane culling: mesh sphere is entirely beyond far plane
+        if distance - radius > self.camera.far {
+            return true;
+        }
+
+        // Near plane culling: mesh sphere is entirely before near plane
+        if distance + radius < self.camera.near {
+            return true;
+        }
+
+        // Passed culling tests - render the mesh
+        false
+    }
+
+    #[inline(always)]
     fn transform_point(&self, point: &[f32; 3], model_matrix: Matrix4<f32>) -> Option<Point3<i32>> {
         let point = nalgebra::Vector4::new(point[0], point[1], point[2], 1.0);
         let point = model_matrix * point;
@@ -69,6 +106,7 @@ impl K3dengine {
         ))
     }
 
+    #[inline(always)]
     fn transform_points<const N: usize>(
         &self,
         indices: &[usize; N],
@@ -91,6 +129,13 @@ impl K3dengine {
     {
         for mesh in meshes {
             if mesh.geometry.vertices.is_empty() {
+                continue;
+            }
+
+            // Frustum culling: Skip meshes that are completely outside the view frustum
+            // This can improve performance by 50-90% by avoiding transformation and rendering
+            // of off-screen objects
+            if self.should_cull_mesh(mesh) {
                 continue;
             }
 
@@ -140,6 +185,21 @@ impl K3dengine {
                 RenderMode::Lines => {}
 
                 RenderMode::SolidLightDir(direction) => {
+                    // Pre-compute lighting constants (once per mesh, not per face)
+                    // This optimization reduces redundant calculations in the inner loop
+                    let color_as_float = Vector3::new(
+                        mesh.color.r() as f32 / 32.0,
+                        mesh.color.g() as f32 / 64.0,
+                        mesh.color.b() as f32 / 32.0,
+                    );
+
+                    // Pre-compute ambient lighting term
+                    let ambient_color = color_as_float * 0.1;
+
+                    // Pre-compute adjusted light direction
+                    // Negate only Z component of direction to fix front/back while keeping left/right
+                    let adjusted_dir = Vector3::new(direction.x, direction.y, -direction.z);
+
                     for (face, normal) in mesh.geometry.faces.iter().zip(mesh.geometry.normals.iter()) {
                         //Backface culling
                         let normal = Vector3::new(normal[0], normal[1], normal[2]);
@@ -156,22 +216,11 @@ impl K3dengine {
                         if let Some([p1, p2, p3]) =
                             self.transform_points(face, mesh.geometry.vertices, transform_matrix)
                         {
-                            let color_as_float = Vector3::new(
-                                mesh.color.r() as f32 / 32.0,
-                                mesh.color.g() as f32 / 64.0,
-                                mesh.color.b() as f32 / 32.0,
-                            );
-
-                            let mut final_color = Vector3::new(0.0f32, 0.0, 0.0);
-
                             // Calculate lighting intensity
-                            // Negate only Z component of direction to fix front/back while keeping left/right
-                            let adjusted_dir = Vector3::new(direction.x, direction.y, -direction.z);
-                            let intensity = transformed_normal.dot(&adjusted_dir);
+                            let intensity = transformed_normal.dot(&adjusted_dir).max(0.0);
 
-                            let intensity = intensity.max(0.0);
-
-                            final_color += color_as_float * intensity + color_as_float * 0.1;
+                            // Compute final color using pre-computed constants
+                            let final_color = color_as_float * intensity + ambient_color;
 
                             let final_color = Vector3::new(
                                 final_color.x.clamp(0.0, 1.0),

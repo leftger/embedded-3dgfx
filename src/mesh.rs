@@ -150,6 +150,22 @@ impl K3dMesh<'_> {
     fn update_model_matrix(&mut self) {
         self.model_matrix = self.similarity.to_homogeneous();
     }
+
+    /// Compute the squared bounding sphere radius of the mesh in model space.
+    /// Returns squared radius to avoid expensive sqrt operation.
+    /// This is used for frustum culling.
+    #[inline]
+    pub fn compute_bounding_radius_sq(&self) -> f32 {
+        let mut max_dist_sq = 0.0f32;
+        for vertex in self.geometry.vertices {
+            let dist_sq = vertex[0] * vertex[0] + vertex[1] * vertex[1] + vertex[2] * vertex[2];
+            if dist_sq > max_dist_sq {
+                max_dist_sq = dist_sq;
+            }
+        }
+        let scale = self.similarity.scaling();
+        max_dist_sq * scale * scale
+    }
 }
 
 #[cfg(test)]
