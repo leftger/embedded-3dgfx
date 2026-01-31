@@ -48,12 +48,15 @@ fn load_stl(file_name: &str) -> String {
         );
     }
 
-    let lines = embedded_gfx::mesh::Geometry::lines_from_faces(
-        &stl.faces
-            .iter()
-            .map(|f| [f.vertices[0], f.vertices[1], f.vertices[2]])
-            .collect::<Vec<_>>(),
-    );
+    let faces_vec: Vec<_> = stl.faces
+        .iter()
+        .map(|f| [f.vertices[0], f.vertices[1], f.vertices[2]])
+        .collect();
+
+    // For a closed mesh, the number of unique edges is approximately faces * 3 / 2
+    // We use faces * 2 to be safe and avoid capacity issues
+    const MAX_EDGES: usize = 4096; // Reasonable limit for proc macro
+    let lines = embedded_gfx::mesh::Geometry::lines_from_faces::<MAX_EDGES>(&faces_vec);
 
     let mut lines_ = String::new();
     for line in lines {

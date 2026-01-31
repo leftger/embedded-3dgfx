@@ -56,6 +56,10 @@ impl Camera {
         Vector3::new(transpose[(2, 0)], transpose[(2, 1)], transpose[(2, 2)])
     }
 
+    pub fn get_aspect_ratio(&self) -> f32 {
+        self.aspect_ratio
+    }
+
     fn update_view(&mut self) {
         let view = Isometry3::look_at_rh(&self.position, &self.target, &Vector3::y());
 
@@ -67,5 +71,70 @@ impl Camera {
         let projection = Perspective3::new(self.aspect_ratio, self.fov, self.near, self.far);
         self.projection_matrix = projection.to_homogeneous();
         self.vp_matrix = self.projection_matrix * self.view_matrix;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_camera_creation() {
+        let camera = Camera::new(16.0 / 9.0);
+        assert!((camera.get_aspect_ratio() - 16.0 / 9.0).abs() < 0.001);
+        assert_eq!(camera.near, 0.4);
+        assert_eq!(camera.far, 20.0);
+        assert_eq!(camera.position, Point3::new(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_camera_set_position() {
+        let mut camera = Camera::new(1.0);
+        let new_pos = Point3::new(5.0, 10.0, 15.0);
+        camera.set_position(new_pos);
+        assert_eq!(camera.position, new_pos);
+    }
+
+    #[test]
+    fn test_camera_set_target() {
+        let mut camera = Camera::new(1.0);
+        let target = Point3::new(1.0, 2.0, 3.0);
+        camera.set_target(target);
+        assert_eq!(camera.target, target);
+    }
+
+    #[test]
+    fn test_camera_set_fovy() {
+        let mut camera = Camera::new(1.0);
+        let new_fov = core::f32::consts::PI / 4.0; // 45 degrees
+        camera.set_fovy(new_fov);
+        assert!((camera.fov - new_fov).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_camera_get_direction() {
+        let mut camera = Camera::new(1.0);
+        camera.set_position(Point3::new(0.0, 0.0, 5.0));
+        camera.set_target(Point3::new(0.0, 0.0, 0.0));
+
+        let direction = camera.get_direction();
+        // Direction should point roughly toward target
+        assert!(direction.magnitude() > 0.0);
+    }
+
+    #[test]
+    fn test_camera_vp_matrix_updates() {
+        let mut camera = Camera::new(1.0);
+        let initial_vp = camera.vp_matrix;
+
+        // Change position should update VP matrix
+        camera.set_position(Point3::new(5.0, 5.0, 5.0));
+        assert_ne!(camera.vp_matrix, initial_vp);
+
+        let after_pos = camera.vp_matrix;
+
+        // Change FOV should update VP matrix
+        camera.set_fovy(core::f32::consts::PI / 4.0);
+        assert_ne!(camera.vp_matrix, after_pos);
     }
 }

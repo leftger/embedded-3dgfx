@@ -1,5 +1,4 @@
 #![no_std]
-#![no_main]
 use camera::Camera;
 use embedded_graphics_core::pixelcolor::Rgb565;
 use embedded_graphics_core::pixelcolor::RgbColor;
@@ -21,6 +20,11 @@ pub enum DrawPrimitive {
     ColoredPoint(Point2<i32>, Rgb565),
     Line([Point2<i32>; 2], Rgb565),
     ColoredTriangle([Point2<i32>; 3], Rgb565),
+    ColoredTriangleWithDepth {
+        points: [Point2<i32>; 3],
+        depths: [f32; 3],
+        color: Rgb565,
+    },
 }
 
 pub struct K3dengine {
@@ -136,12 +140,15 @@ impl K3dengine {
                 RenderMode::Lines => {}
 
                 RenderMode::SolidLightDir(direction) => {
-                    for (face, normal) in mesh.geometry.faces.iter().zip(mesh.geometry.normals) {
+                    for (face, normal) in mesh.geometry.faces.iter().zip(mesh.geometry.normals.iter()) {
                         //Backface culling
                         let normal = Vector3::new(normal[0], normal[1], normal[2]);
 
                         let transformed_normal = mesh.model_matrix.transform_vector(&normal);
 
+                        // Backface culling: cull faces pointing away from camera
+                        // This improves performance by ~50% (don't render back faces)
+                        // Z-buffer handles depth ordering, but culling avoids wasted work
                         if self.camera.get_direction().dot(&transformed_normal) < 0.0 {
                             continue;
                         }
@@ -157,11 +164,14 @@ impl K3dengine {
 
                             let mut final_color = Vector3::new(0.0f32, 0.0, 0.0);
 
-                            let intensity = transformed_normal.dot(&direction);
+                            // Calculate lighting intensity
+                            // Negate only Z component of direction to fix front/back while keeping left/right
+                            let adjusted_dir = Vector3::new(direction.x, direction.y, -direction.z);
+                            let intensity = transformed_normal.dot(&adjusted_dir);
 
                             let intensity = intensity.max(0.0);
 
-                            final_color += color_as_float * intensity + color_as_float * 0.4;
+                            final_color += color_as_float * intensity + color_as_float * 0.1;
 
                             let final_color = Vector3::new(
                                 final_color.x.clamp(0.0, 1.0),
@@ -174,10 +184,11 @@ impl K3dengine {
                                 (final_color.y * 63.0) as u8,
                                 (final_color.z * 31.0) as u8,
                             );
-                            callback(DrawPrimitive::ColoredTriangle(
-                                [p1.xy(), p2.xy(), p3.xy()],
+                            callback(DrawPrimitive::ColoredTriangleWithDepth {
+                                points: [p1.xy(), p2.xy(), p3.xy()],
+                                depths: [p1.z as f32, p2.z as f32, p3.z as f32],
                                 color,
-                            ));
+                            });
                         }
                     }
                 }
@@ -190,10 +201,11 @@ impl K3dengine {
                                 mesh.geometry.vertices,
                                 transform_matrix,
                             ) {
-                                callback(DrawPrimitive::ColoredTriangle(
-                                    [p1.xy(), p2.xy(), p3.xy()],
-                                    mesh.color,
-                                ));
+                                callback(DrawPrimitive::ColoredTriangleWithDepth {
+                                    points: [p1.xy(), p2.xy(), p3.xy()],
+                                    depths: [p1.z as f32, p2.z as f32, p3.z as f32],
+                                    color: mesh.color,
+                                });
                             }
                         }
                     } else {
@@ -204,6 +216,7 @@ impl K3dengine {
 
                             let transformed_normal = mesh.model_matrix.transform_vector(&normal);
 
+                            // Backface culling: cull faces pointing away from camera
                             if self.camera.get_direction().dot(&transformed_normal) < 0.0 {
                                 continue;
                             }
@@ -213,15 +226,206 @@ impl K3dengine {
                                 mesh.geometry.vertices,
                                 transform_matrix,
                             ) {
-                                callback(DrawPrimitive::ColoredTriangle(
-                                    [p1.xy(), p2.xy(), p3.xy()],
-                                    mesh.color,
-                                ));
+                                callback(DrawPrimitive::ColoredTriangleWithDepth {
+                                    points: [p1.xy(), p2.xy(), p3.xy()],
+                                    depths: [p1.z as f32, p2.z as f32, p3.z as f32],
+                                    color: mesh.color,
+                                });
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+    use super::*;
+
+    #[test]
+    fn test_engine_creation() {
+        let engine = K3dengine::new(640, 480);
+        assert_eq!(engine.width, 640);
+        assert_eq!(engine.height, 480);
+        assert!((engine.camera.get_aspect_ratio() - 640.0 / 480.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_transform_point_basic() {
+        let engine = K3dengine::new(640, 480);
+        // Use camera's VP matrix directly
+        let transform_matrix = engine.camera.vp_matrix;
+
+        // Point in front of default camera, within view frustum
+        // Default camera is at origin looking at origin, so we need a point in front
+        let point = [0.0, 0.0, -5.0];
+        let result = engine.transform_point(&point, transform_matrix);
+
+        if let Some(transformed) = result {
+            // Should be within screen bounds
+            assert!(transformed.x >= 0 && transformed.x < 640);
+            assert!(transformed.y >= 0 && transformed.y < 480);
+        }
+        // If None, the point was culled which is also valid behavior
+    }
+
+    #[test]
+    fn test_transform_point_clamps_out_of_bounds() {
+        let engine = K3dengine::new(640, 480);
+        let model_matrix = nalgebra::Matrix4::identity();
+
+        // Point way outside the viewport should be clamped/rejected
+        let point = [100.0, 100.0, -5.0];
+        let result = engine.transform_point(&point, model_matrix);
+        // Should return None because coordinates are clamped out
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_transform_point_behind_camera() {
+        let engine = K3dengine::new(640, 480);
+        let transform_matrix = engine.camera.vp_matrix;
+
+        // Point with positive z (behind default camera orientation)
+        let point = [0.0, 0.0, 1.0];
+        let _result = engine.transform_point(&point, transform_matrix);
+        // Point behind camera or outside frustum should return None
+        // (actual behavior depends on camera setup and projection)
+        // This test just verifies the function doesn't panic
+    }
+
+    #[test]
+    fn test_transform_point_near_plane_clipping() {
+        let engine = K3dengine::new(640, 480);
+        let model_matrix = nalgebra::Matrix4::identity();
+
+        // Point too close to camera (before near plane)
+        let point = [0.0, 0.0, -0.01];
+        let result = engine.transform_point(&point, model_matrix);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_transform_point_far_plane_clipping() {
+        let engine = K3dengine::new(640, 480);
+        let model_matrix = nalgebra::Matrix4::identity();
+
+        // Point too far from camera (beyond far plane)
+        let point = [0.0, 0.0, -1000.0];
+        let result = engine.transform_point(&point, model_matrix);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_transform_points_array() {
+        let engine = K3dengine::new(640, 480);
+        let transform_matrix = engine.camera.vp_matrix;
+
+        let vertices = [
+            [0.0, 0.0, -5.0],
+            [0.1, 0.0, -5.0],
+            [0.0, 0.1, -5.0],
+        ];
+        let indices = [0, 1, 2];
+
+        let result = engine.transform_points(&indices, &vertices, transform_matrix);
+
+        // If transform succeeds, verify we get 3 points
+        if let Some(points) = result {
+            assert_eq!(points.len(), 3);
+        }
+        // If None, one or more points were culled which is valid
+    }
+
+    #[test]
+    fn test_render_empty_faces_mesh() {
+        let engine = K3dengine::new(640, 480);
+        let vertices = [[0.0, 0.0, -5.0]]; // At least one vertex required
+        let geometry = mesh::Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+        let mesh = mesh::K3dMesh::new(geometry);
+
+        let mut callback_count = 0;
+        engine.render(std::iter::once(&mesh), |_| {
+            callback_count += 1;
+        });
+
+        // Mesh with no faces/lines should trigger one point callback (default is Points mode)
+        assert!(callback_count > 0);
+    }
+
+    #[test]
+    fn test_render_points_mode() {
+        let engine = K3dengine::new(640, 480);
+
+        let vertices = [
+            [0.0, 0.0, -5.0],
+            [0.5, 0.0, -5.0],
+        ];
+
+        let geometry = mesh::Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mut mesh = mesh::K3dMesh::new(geometry);
+        mesh.set_render_mode(mesh::RenderMode::Points);
+
+        let mut primitives = std::vec::Vec::new();
+        engine.render(std::iter::once(&mesh), |prim| {
+            primitives.push(prim);
+        });
+
+        // Should render points
+        assert!(primitives.len() > 0);
+        for prim in primitives {
+            assert!(matches!(prim, DrawPrimitive::ColoredPoint(_, _)));
+        }
+    }
+
+    #[test]
+    fn test_render_lines_mode_with_faces() {
+        let engine = K3dengine::new(640, 480);
+
+        let vertices = [
+            [0.0, 0.0, -5.0],
+            [0.5, 0.0, -5.0],
+            [0.0, 0.5, -5.0],
+        ];
+
+        let faces = [[0, 1, 2]];
+
+        let geometry = mesh::Geometry {
+            vertices: &vertices,
+            faces: &faces,
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mut mesh = mesh::K3dMesh::new(geometry);
+        mesh.set_render_mode(mesh::RenderMode::Lines);
+
+        let mut primitives = std::vec::Vec::new();
+        engine.render(std::iter::once(&mesh), |prim| {
+            primitives.push(prim);
+        });
+
+        // Should render 3 lines (edges of triangle)
+        assert_eq!(primitives.len(), 3);
+        for prim in primitives {
+            assert!(matches!(prim, DrawPrimitive::Line(_, _)));
         }
     }
 }

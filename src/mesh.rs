@@ -3,7 +3,7 @@ use heapless::Vec;
 use log::error;
 use nalgebra::{Point3, Similarity3, UnitQuaternion, Vector3};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum RenderMode {
     Points,
     Lines,
@@ -51,8 +51,17 @@ impl Geometry<'_> {
         true
     }
 
-    pub fn lines_from_faces(faces: &[[usize; 3]]) -> Vec<(usize, usize), 512> {
-        let mut lines: Vec<(usize, usize), 512> = Vec::new();
+    /// Converts faces to unique edge pairs for line rendering.
+    ///
+    /// # Type Parameters
+    /// * `N` - Maximum capacity for the edges buffer. For a closed mesh, a good estimate is
+    ///   `faces.len() * 3 / 2` since each edge is typically shared by 2 faces.
+    ///
+    /// # Returns
+    /// A heapless Vec containing unique edge pairs. If capacity is exceeded, returns
+    /// partial results with an error logged.
+    pub fn lines_from_faces<const N: usize>(faces: &[[usize; 3]]) -> Vec<(usize, usize), N> {
+        let mut lines: Vec<(usize, usize), N> = Vec::new();
         for face in faces {
             for line in &[(face[0], face[1]), (face[1], face[2]), (face[2], face[0])] {
                 let (a, b) = if line.0 < line.1 {
@@ -61,7 +70,10 @@ impl Geometry<'_> {
                     (line.1, line.0)
                 };
                 if !lines.iter().any(|&(x, y)| x == a && y == b) {
-                    lines.push((a, b)).ok();
+                    if lines.push((a, b)).is_err() {
+                        error!("lines_from_faces: heapless Vec capacity exceeded (max {}). Some edges will not be rendered.", N);
+                        return lines;
+                    }
                 }
             }
         }
@@ -137,5 +149,255 @@ impl K3dMesh<'_> {
 
     fn update_model_matrix(&mut self) {
         self.model_matrix = self.similarity.to_homogeneous();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+    use super::*;
+
+    #[test]
+    fn test_geometry_validation_valid() {
+        let vertices = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        let faces = [[0, 1, 2]];
+
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &faces,
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        assert!(geometry.check_validity());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_geometry_validation_invalid_face_index() {
+        let vertices = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
+        let faces = [[0, 1, 5]]; // Index 5 is out of bounds
+
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &faces,
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        // This should panic because we call assert! in K3dMesh::new
+        K3dMesh::new(geometry);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_geometry_validation_invalid_line_index() {
+        let vertices = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
+        let lines = [[0, 10]]; // Index 10 is out of bounds
+
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &lines,
+            normals: &[],
+        };
+
+        K3dMesh::new(geometry);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_geometry_validation_color_length_mismatch() {
+        let vertices = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]];
+        let colors = [Rgb565::CSS_RED]; // Only 1 color for 2 vertices
+
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &colors,
+            lines: &[],
+            normals: &[],
+        };
+
+        K3dMesh::new(geometry);
+    }
+
+    #[test]
+    fn test_lines_from_faces_basic() {
+        let faces = [[0, 1, 2]];
+        let lines = Geometry::lines_from_faces::<10>(&faces);
+
+        // Triangle should produce 3 unique edges
+        assert_eq!(lines.len(), 3);
+
+        // Check that edges are unique and normalized (smaller index first)
+        let expected_edges = [(0, 1), (0, 2), (1, 2)];
+        for edge in expected_edges.iter() {
+            assert!(lines.contains(edge));
+        }
+    }
+
+    #[test]
+    fn test_lines_from_faces_shared_edges() {
+        let faces = [[0, 1, 2], [0, 2, 3]];
+        let lines = Geometry::lines_from_faces::<10>(&faces);
+
+        // Two triangles sharing edge (0,2) should produce 5 unique edges
+        assert_eq!(lines.len(), 5);
+    }
+
+    #[test]
+    fn test_lines_from_faces_capacity_limit() {
+        let faces = [[0, 1, 2], [3, 4, 5]];
+        // Very small capacity that can't hold all edges
+        let lines = Geometry::lines_from_faces::<2>(&faces);
+
+        // Should only contain 2 edges due to capacity limit
+        assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn test_mesh_creation() {
+        let vertices = [[0.0, 0.0, 0.0]];
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mesh = K3dMesh::new(geometry);
+        assert_eq!(mesh.color, Rgb565::CSS_WHITE);
+        assert_eq!(mesh.render_mode, RenderMode::Points);
+        assert_eq!(mesh.get_position(), Point3::new(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_mesh_set_color() {
+        let vertices = [[0.0, 0.0, 0.0]];
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mut mesh = K3dMesh::new(geometry);
+        mesh.set_color(Rgb565::CSS_RED);
+        assert_eq!(mesh.color, Rgb565::CSS_RED);
+    }
+
+    #[test]
+    fn test_mesh_set_position() {
+        let vertices = [[0.0, 0.0, 0.0]];
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mut mesh = K3dMesh::new(geometry);
+        mesh.set_position(5.0, 10.0, 15.0);
+        assert_eq!(mesh.get_position(), Point3::new(5.0, 10.0, 15.0));
+    }
+
+    #[test]
+    fn test_mesh_set_scale() {
+        let vertices = [[0.0, 0.0, 0.0]];
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mut mesh = K3dMesh::new(geometry);
+        mesh.set_scale(2.0);
+        assert!((mesh.similarity.scaling() - 2.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_mesh_set_scale_zero_ignored() {
+        let vertices = [[0.0, 0.0, 0.0]];
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mut mesh = K3dMesh::new(geometry);
+        let original_scale = mesh.similarity.scaling();
+        mesh.set_scale(0.0);
+        // Scale should remain unchanged
+        assert_eq!(mesh.similarity.scaling(), original_scale);
+    }
+
+    #[test]
+    fn test_mesh_set_attitude() {
+        let vertices = [[0.0, 0.0, 0.0]];
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mut mesh = K3dMesh::new(geometry);
+        mesh.set_attitude(0.1, 0.2, 0.3);
+        // Just verify it doesn't panic and updates the matrix
+        assert_ne!(mesh.model_matrix, nalgebra::Matrix4::identity());
+    }
+
+    #[test]
+    fn test_mesh_set_target() {
+        let vertices = [[0.0, 0.0, 0.0]];
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mut mesh = K3dMesh::new(geometry);
+        mesh.set_position(5.0, 5.0, 5.0);
+        mesh.set_target(Point3::new(0.0, 0.0, 0.0));
+        // Mesh should now be oriented toward origin
+        // Just verify it doesn't panic
+        assert_ne!(mesh.model_matrix, nalgebra::Matrix4::identity());
+    }
+
+    #[test]
+    fn test_mesh_render_mode_changes() {
+        let vertices = [[0.0, 0.0, 0.0]];
+        let geometry = Geometry {
+            vertices: &vertices,
+            faces: &[],
+            colors: &[],
+            lines: &[],
+            normals: &[],
+        };
+
+        let mut mesh = K3dMesh::new(geometry);
+
+        mesh.set_render_mode(RenderMode::Lines);
+        assert_eq!(mesh.render_mode, RenderMode::Lines);
+
+        mesh.set_render_mode(RenderMode::Solid);
+        assert_eq!(mesh.render_mode, RenderMode::Solid);
+
+        mesh.set_render_mode(RenderMode::SolidLightDir(Vector3::new(0.0, 1.0, 0.0)));
+        assert!(matches!(mesh.render_mode, RenderMode::SolidLightDir(_)));
     }
 }

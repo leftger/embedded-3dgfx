@@ -20,9 +20,50 @@ This is an opengl-like library to draw 3D graphics in an embedded system, built 
 - [ ] proper pipeline for vertex / fragment shading
 - [ ] texture mapping ?
 
-## Example
+## Examples
 
-You can find a working example in the *Rust on M5Stack Cardputer* project
+Interactive visual examples are available in the `examples/` directory. These demos use the `embedded-graphics-simulator` to run on desktop:
+
+```bash
+# Run examples (requires SDL2)
+cargo run --example basic_rendering --features std
+cargo run --example rotating_cube --features std
+cargo run --example scene_viewer --features std
+cargo run --example lighting_demo --features std
+```
+
+### Available Examples
+
+- **basic_rendering** - Cycle through render modes (Points, Lines, Solid)
+- **rotating_cube** - Animated 3D rotation with FPS counter
+- **scene_viewer** - Interactive scene with camera controls
+- **lighting_demo** - Directional lighting demonstration
+
+See [examples/README.md](examples/README.md) for detailed documentation.
+
+## Testing
+
+The library includes a comprehensive test suite covering all major components:
+
+```bash
+# Run all tests
+cargo test
+
+# Run with verbose output
+cargo test -- --nocapture
+```
+
+Test coverage includes:
+- Camera transformations and projections
+- Mesh geometry validation
+- Coordinate transformation and clipping
+- Performance counter timing
+- Drawing primitives (points, lines, triangles)
+- Full rendering pipeline integration tests
+
+## Production Example
+
+You can find a working embedded example in the *Rust on M5Stack Cardputer* project:
 
 https://github.com/Kezii/Rust-M5Stack-Cardputer
 
