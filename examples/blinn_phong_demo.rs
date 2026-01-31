@@ -46,18 +46,17 @@ fn main() {
     let mut suzanne = K3dMesh::new(embed_stl!("examples/3d_models/Suzanne.stl"));
     suzanne.set_color(Rgb565::new(20, 40, 31)); // Cyan-ish
     suzanne.set_scale(2.0);
-    suzanne.set_position(0.0, 0.0, 0.0);
+    suzanne.set_position(0.0, 0.7, 10.0);
 
     // Teapot - classic computer graphics model
     let mut teapot = K3dMesh::new(embed_stl!("examples/3d_models/Teapot_low.stl"));
     teapot.set_color(Rgb565::new(31, 20, 10)); // Gold-ish
-    teapot.set_scale(0.3);
-    teapot.set_position(-5.0, -1.0, 0.0);
+    teapot.set_position(-10.0, 0.0, 0.0);
 
     // Blahaj
     let mut blahaj = K3dMesh::new(embed_stl!("examples/3d_models/blahaj.stl"));
     blahaj.set_color(Rgb565::new(105 >> 3, 150 >> 2, 173 >> 3));
-    blahaj.set_position(5.0, -1.0, 0.0);
+    blahaj.set_position(0.0, 0.0, 0.0);
 
     println!("Models loaded!");
 

@@ -14,6 +14,7 @@ use nalgebra::Vector3;
 #[allow(unused_imports)]
 use nalgebra::ComplexField;
 
+pub mod billboard;
 pub mod camera;
 pub mod draw;
 pub mod framebuffer;
@@ -107,7 +108,7 @@ impl K3dengine {
     }
 
     #[inline(always)]
-    fn transform_points<const N: usize>(
+    pub fn transform_points<const N: usize>(
         &self,
         indices: &[usize; N],
         vertices: &[[f32; 3]],
@@ -139,18 +140,22 @@ impl K3dengine {
                 continue;
             }
 
+            // LOD Selection: Choose geometry based on distance from camera
+            let mesh_pos = mesh.get_position();
+            let distance = (mesh_pos - self.camera.position).norm();
+            let geometry = mesh.select_lod(distance);
+
             let transform_matrix = self.camera.vp_matrix * mesh.model_matrix;
 
             match mesh.render_mode {
                 RenderMode::Points => {
-                    let screen_space_points = mesh
-                        .geometry
+                    let screen_space_points = geometry
                         .vertices
                         .iter()
                         .filter_map(|v| self.transform_point(v, transform_matrix));
 
-                    if mesh.geometry.colors.len() == mesh.geometry.vertices.len() {
-                        for (point, color) in screen_space_points.zip(mesh.geometry.colors) {
+                    if geometry.colors.len() == geometry.vertices.len() {
+                        for (point, color) in screen_space_points.zip(geometry.colors) {
                             callback(DrawPrimitive::ColoredPoint(point.xy(), *color));
                         }
                     } else {
@@ -160,20 +165,20 @@ impl K3dengine {
                     }
                 }
 
-                RenderMode::Lines if !mesh.geometry.lines.is_empty() => {
-                    for line in mesh.geometry.lines {
+                RenderMode::Lines if !geometry.lines.is_empty() => {
+                    for line in geometry.lines {
                         if let Some([p1, p2]) =
-                            self.transform_points(line, mesh.geometry.vertices, transform_matrix)
+                            self.transform_points(line, geometry.vertices, transform_matrix)
                         {
                             callback(DrawPrimitive::Line([p1.xy(), p2.xy()], mesh.color));
                         }
                     }
                 }
 
-                RenderMode::Lines if !mesh.geometry.faces.is_empty() => {
-                    for face in mesh.geometry.faces {
+                RenderMode::Lines if !geometry.faces.is_empty() => {
+                    for face in geometry.faces {
                         if let Some([p1, p2, p3]) =
-                            self.transform_points(face, mesh.geometry.vertices, transform_matrix)
+                            self.transform_points(face, geometry.vertices, transform_matrix)
                         {
                             callback(DrawPrimitive::Line([p1.xy(), p2.xy()], mesh.color));
                             callback(DrawPrimitive::Line([p2.xy(), p3.xy()], mesh.color));
@@ -200,7 +205,7 @@ impl K3dengine {
                     // Negate only Z component of direction to fix front/back while keeping left/right
                     let adjusted_dir = Vector3::new(direction.x, direction.y, -direction.z);
 
-                    for (face, normal) in mesh.geometry.faces.iter().zip(mesh.geometry.normals.iter()) {
+                    for (face, normal) in geometry.faces.iter().zip(geometry.normals.iter()) {
                         //Backface culling
                         let normal = Vector3::new(normal[0], normal[1], normal[2]);
 
@@ -214,7 +219,7 @@ impl K3dengine {
                         }
 
                         if let Some([p1, p2, p3]) =
-                            self.transform_points(face, mesh.geometry.vertices, transform_matrix)
+                            self.transform_points(face, geometry.vertices, transform_matrix)
                         {
                             // Calculate lighting intensity
                             let intensity = transformed_normal.dot(&adjusted_dir).max(0.0);
@@ -264,7 +269,7 @@ impl K3dengine {
                     // Normalize light direction
                     let light_dir_normalized = adjusted_light_dir.normalize();
 
-                    for (face, normal) in mesh.geometry.faces.iter().zip(mesh.geometry.normals.iter()) {
+                    for (face, normal) in geometry.faces.iter().zip(geometry.normals.iter()) {
                         //Backface culling
                         let normal = Vector3::new(normal[0], normal[1], normal[2]);
                         let transformed_normal = mesh.model_matrix.transform_vector(&normal);
@@ -276,12 +281,12 @@ impl K3dengine {
                         }
 
                         if let Some([p1, p2, p3]) =
-                            self.transform_points(face, mesh.geometry.vertices, transform_matrix)
+                            self.transform_points(face, geometry.vertices, transform_matrix)
                         {
                             // Calculate face center in world space for view direction
-                            let v0 = mesh.geometry.vertices[face[0]];
-                            let v1 = mesh.geometry.vertices[face[1]];
-                            let v2 = mesh.geometry.vertices[face[2]];
+                            let v0 = geometry.vertices[face[0]];
+                            let v1 = geometry.vertices[face[1]];
+                            let v2 = geometry.vertices[face[2]];
                             let face_center = Point3::new(
                                 (v0[0] + v1[0] + v2[0]) / 3.0,
                                 (v0[1] + v1[1] + v2[1]) / 3.0,
@@ -327,11 +332,11 @@ impl K3dengine {
                 }
 
                 RenderMode::Solid => {
-                    if mesh.geometry.normals.is_empty() {
-                        for face in mesh.geometry.faces.iter() {
+                    if geometry.normals.is_empty() {
+                        for face in geometry.faces.iter() {
                             if let Some([p1, p2, p3]) = self.transform_points(
                                 face,
-                                mesh.geometry.vertices,
+                                geometry.vertices,
                                 transform_matrix,
                             ) {
                                 callback(DrawPrimitive::ColoredTriangleWithDepth {
@@ -342,7 +347,7 @@ impl K3dengine {
                             }
                         }
                     } else {
-                        for (face, normal) in mesh.geometry.faces.iter().zip(mesh.geometry.normals)
+                        for (face, normal) in geometry.faces.iter().zip(geometry.normals)
                         {
                             //Backface culling
                             let normal = Vector3::new(normal[0], normal[1], normal[2]);
@@ -356,7 +361,7 @@ impl K3dengine {
 
                             if let Some([p1, p2, p3]) = self.transform_points(
                                 face,
-                                mesh.geometry.vertices,
+                                geometry.vertices,
                                 transform_matrix,
                             ) {
                                 callback(DrawPrimitive::ColoredTriangleWithDepth {

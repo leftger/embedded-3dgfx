@@ -15,7 +15,7 @@ pub enum RenderMode {
         shininess: f32,
     },
 }
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct Geometry<'a> {
     pub vertices: &'a [[f32; 3]],
     pub faces: &'a [[usize; 3]],
@@ -86,6 +86,30 @@ impl Geometry<'_> {
     }
 }
 
+/// Level of Detail configuration for a mesh
+///
+/// Defines distance thresholds for switching between LOD levels:
+/// - 0 to high_distance: Use high detail geometry
+/// - high_distance to medium_distance: Use medium detail geometry
+/// - Beyond medium_distance: Use low detail geometry
+#[derive(Debug, Clone, Copy)]
+pub struct LODLevels {
+    /// Distance threshold for high detail (0 to this distance)
+    pub high_distance: f32,
+    /// Distance threshold for medium detail (high_distance to this distance)
+    pub medium_distance: f32,
+}
+
+impl Default for LODLevels {
+    fn default() -> Self {
+        Self {
+            high_distance: 50.0,
+            medium_distance: 100.0,
+        }
+    }
+}
+
+/// A mesh with optional Level of Detail (LOD) support
 pub struct K3dMesh<'a> {
     pub similarity: Similarity3<f32>,
     pub model_matrix: nalgebra::Matrix4<f32>,
@@ -93,9 +117,15 @@ pub struct K3dMesh<'a> {
     pub color: Rgb565,
     pub render_mode: RenderMode,
     pub geometry: Geometry<'a>,
+
+    /// Optional LOD geometries (medium detail, low detail)
+    /// If None, only the main geometry is used
+    pub lod_medium: Option<Geometry<'a>>,
+    pub lod_low: Option<Geometry<'a>>,
+    pub lod_levels: LODLevels,
 }
 
-impl K3dMesh<'_> {
+impl<'a> K3dMesh<'a> {
     pub fn new(geometry: Geometry) -> K3dMesh {
         assert!(geometry.check_validity());
         let sim = Similarity3::new(Vector3::new(0.0, 0.0, 0.0), nalgebra::zero(), 1.0);
@@ -105,6 +135,53 @@ impl K3dMesh<'_> {
             color: Rgb565::CSS_WHITE,
             render_mode: RenderMode::Points,
             geometry,
+            lod_medium: None,
+            lod_low: None,
+            lod_levels: LODLevels::default(),
+        }
+    }
+
+    /// Set LOD geometries for this mesh
+    ///
+    /// # Arguments
+    /// * `medium` - Medium detail geometry (optional)
+    /// * `low` - Low detail geometry (optional)
+    /// * `levels` - Distance thresholds for switching LOD levels
+    pub fn set_lod<'b>(
+        &mut self,
+        medium: Option<Geometry<'b>>,
+        low: Option<Geometry<'b>>,
+        levels: LODLevels,
+    ) where
+        'b: 'a,
+    {
+        if let Some(ref geom) = medium {
+            assert!(geom.check_validity());
+        }
+        if let Some(ref geom) = low {
+            assert!(geom.check_validity());
+        }
+        self.lod_medium = medium;
+        self.lod_low = low;
+        self.lod_levels = levels;
+    }
+
+    /// Select the appropriate geometry based on distance from camera
+    ///
+    /// Returns a reference to the geometry that should be used for rendering
+    #[inline]
+    pub fn select_lod(&self, distance: f32) -> &Geometry<'_> {
+        if distance < self.lod_levels.high_distance {
+            // High detail
+            &self.geometry
+        } else if distance < self.lod_levels.medium_distance {
+            // Medium detail
+            self.lod_medium.as_ref().unwrap_or(&self.geometry)
+        } else {
+            // Low detail
+            self.lod_low.as_ref().unwrap_or(
+                self.lod_medium.as_ref().unwrap_or(&self.geometry)
+            )
         }
     }
 
