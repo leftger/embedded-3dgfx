@@ -9,6 +9,11 @@ pub enum RenderMode {
     Lines,
     Solid,
     SolidLightDir(Vector3<f32>),
+    BlinnPhong {
+        light_dir: Vector3<f32>,
+        specular_intensity: f32,
+        shininess: f32,
+    },
 }
 #[derive(Debug, Default)]
 pub struct Geometry<'a> {

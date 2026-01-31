@@ -242,6 +242,90 @@ impl K3dengine {
                     }
                 }
 
+                RenderMode::BlinnPhong {
+                    light_dir,
+                    specular_intensity,
+                    shininess,
+                } => {
+                    // Pre-compute lighting constants (once per mesh, not per face)
+                    let color_as_float = Vector3::new(
+                        mesh.color.r() as f32 / 32.0,
+                        mesh.color.g() as f32 / 64.0,
+                        mesh.color.b() as f32 / 32.0,
+                    );
+
+                    // Pre-compute ambient lighting term
+                    let ambient_color = color_as_float * 0.1;
+
+                    // Pre-compute adjusted light direction
+                    // Negate only Z component of direction to fix front/back while keeping left/right
+                    let adjusted_light_dir = Vector3::new(light_dir.x, light_dir.y, -light_dir.z);
+
+                    // Normalize light direction
+                    let light_dir_normalized = adjusted_light_dir.normalize();
+
+                    for (face, normal) in mesh.geometry.faces.iter().zip(mesh.geometry.normals.iter()) {
+                        //Backface culling
+                        let normal = Vector3::new(normal[0], normal[1], normal[2]);
+                        let transformed_normal = mesh.model_matrix.transform_vector(&normal);
+                        let normalized_normal = transformed_normal.normalize();
+
+                        // Backface culling: cull faces pointing away from camera
+                        if self.camera.get_direction().dot(&normalized_normal) < 0.0 {
+                            continue;
+                        }
+
+                        if let Some([p1, p2, p3]) =
+                            self.transform_points(face, mesh.geometry.vertices, transform_matrix)
+                        {
+                            // Calculate face center in world space for view direction
+                            let v0 = mesh.geometry.vertices[face[0]];
+                            let v1 = mesh.geometry.vertices[face[1]];
+                            let v2 = mesh.geometry.vertices[face[2]];
+                            let face_center = Point3::new(
+                                (v0[0] + v1[0] + v2[0]) / 3.0,
+                                (v0[1] + v1[1] + v2[1]) / 3.0,
+                                (v0[2] + v1[2] + v2[2]) / 3.0,
+                            );
+                            let face_center_world = mesh.model_matrix.transform_point(&face_center);
+
+                            // View direction: from face to camera
+                            let view_dir = (self.camera.position - face_center_world).normalize();
+
+                            // Blinn-Phong half vector: H = normalize(L + V)
+                            let half_vector = (light_dir_normalized + view_dir).normalize();
+
+                            // Diffuse term: N·L
+                            let diffuse_intensity = normalized_normal.dot(&light_dir_normalized).max(0.0);
+
+                            // Specular term: (N·H)^shininess
+                            let specular_term = normalized_normal.dot(&half_vector).max(0.0).powf(shininess);
+
+                            // Compute final color: ambient + diffuse + specular
+                            let diffuse_color = color_as_float * diffuse_intensity;
+                            let specular_color = Vector3::new(1.0, 1.0, 1.0) * specular_term * specular_intensity;
+                            let final_color = ambient_color + diffuse_color + specular_color;
+
+                            let final_color = Vector3::new(
+                                final_color.x.clamp(0.0, 1.0),
+                                final_color.y.clamp(0.0, 1.0),
+                                final_color.z.clamp(0.0, 1.0),
+                            );
+
+                            let color = Rgb565::new(
+                                (final_color.x * 31.0) as u8,
+                                (final_color.y * 63.0) as u8,
+                                (final_color.z * 31.0) as u8,
+                            );
+                            callback(DrawPrimitive::ColoredTriangleWithDepth {
+                                points: [p1.xy(), p2.xy(), p3.xy()],
+                                depths: [p1.z as f32, p2.z as f32, p3.z as f32],
+                                color,
+                            });
+                        }
+                    }
+                }
+
                 RenderMode::Solid => {
                     if mesh.geometry.normals.is_empty() {
                         for face in mesh.geometry.faces.iter() {
