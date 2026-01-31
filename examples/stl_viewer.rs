@@ -196,15 +196,14 @@ fn main() {
             );
         engine.camera.set_target(lookat);
 
-        // Animate objects - rotate them around their vertical axis (Y)
-        // set_attitude(roll, pitch, yaw) where pitch is Y-axis rotation
-        suzanne.set_attitude(0.0, time * 2.0, 0.0);
+        // Animate objects
+        suzanne.set_attitude(-PI / 2.0, time * 2.0, 0.0);
         suzanne.set_position(0.0, 0.7 + (time * 3.4).sin() * 0.2, 10.0);
 
-        blahaj.set_attitude(0.0, time * 1.5, 0.0);
+        blahaj.set_attitude(-PI / 2.0, time * 2.0, 0.0);
         blahaj.set_position(0.0, 0.7 + (time * 3.4).sin() * 0.2, 0.0);
 
-        teapot.set_attitude(0.0, time * 1.0, 0.0);
+        teapot.set_attitude(-PI / 2.0, time * 1.0, 0.0);
         teapot.set_scale(0.2 + 0.1 * (time * 5.0).sin());
 
         time += 0.3 * dt;
