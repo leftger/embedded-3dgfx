@@ -36,8 +36,8 @@ fn main() {
 
     // Create 3D engine
     let mut engine = K3dengine::new(800, 600);
-    engine.camera.set_position(Point3::new(0.0, 3.0, 8.0));
-    engine.camera.set_target(Point3::new(0.0, 0.0, 0.0));
+    engine.camera.set_position(Point3::new(-10.0, 2.0, 0.0));
+    engine.camera.set_target(Point3::new(-9.0, 2.0, 0.0));
 
     // Load models
     println!("Loading models...");
