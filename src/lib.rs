@@ -32,6 +32,15 @@ pub enum DrawPrimitive {
         depths: [f32; 3],
         color: Rgb565,
     },
+    GouraudTriangle {
+        points: [Point2<i32>; 3],
+        colors: [Rgb565; 3],
+    },
+    GouraudTriangleWithDepth {
+        points: [Point2<i32>; 3],
+        depths: [f32; 3],
+        colors: [Rgb565; 3],
+    },
 }
 
 pub struct K3dengine {
