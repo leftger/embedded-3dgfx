@@ -3,16 +3,16 @@
 //! Shows directional lighting on 3D meshes with animated light direction.
 //! This demo uses simple cubes positioned to show clear lighting differences.
 
-use embedded_gfx::draw::draw_zbuffered;
-use embedded_gfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_gfx::perfcounter::PerformanceCounter;
-use embedded_gfx::K3dengine;
-use embedded_graphics::mono_font::{ascii::FONT_6X10, MonoTextStyle};
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::draw::draw_zbuffered;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::perfcounter::PerformanceCounter;
+use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use nalgebra::{Point3, Vector3};
 use std::thread;
@@ -38,12 +38,18 @@ fn make_cube() -> (Vec<[f32; 3]>, Vec<[usize; 3]>, Vec<[f32; 3]>) {
     ];
 
     let faces = vec![
-        [0, 1, 2], [0, 2, 3], // Front
-        [5, 4, 7], [5, 7, 6], // Back
-        [3, 2, 6], [3, 6, 7], // Top
-        [4, 5, 1], [4, 1, 0], // Bottom
-        [1, 5, 6], [1, 6, 2], // Right
-        [4, 0, 3], [4, 3, 7], // Left
+        [0, 1, 2],
+        [0, 2, 3], // Front
+        [5, 4, 7],
+        [5, 7, 6], // Back
+        [3, 2, 6],
+        [3, 6, 7], // Top
+        [4, 5, 1],
+        [4, 1, 0], // Bottom
+        [1, 5, 6],
+        [1, 6, 2], // Right
+        [4, 0, 3],
+        [4, 3, 7], // Left
     ];
 
     // Calculate per-face normals
@@ -61,9 +67,7 @@ fn make_cube() -> (Vec<[f32; 3]>, Vec<[usize; 3]>, Vec<[f32; 3]>) {
 fn main() {
     let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(800, 600));
 
-    let output_settings = OutputSettingsBuilder::new()
-        .scale(1)
-        .build();
+    let output_settings = OutputSettingsBuilder::new().scale(1).build();
 
     let mut window = Window::new("Lighting Demo - Arrow keys to move light", &output_settings);
 
@@ -81,6 +85,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &cube_normals,
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut cube1 = K3dMesh::new(cube_geometry);
@@ -93,6 +99,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &cube_normals,
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut cube2 = K3dMesh::new(cube_geometry2);
@@ -105,6 +113,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &cube_normals,
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut cube3 = K3dMesh::new(cube_geometry3);
@@ -185,12 +195,8 @@ fn main() {
         };
 
         // Create light direction vector
-        let light_dir = Vector3::new(
-            light_angle_h.cos(),
-            light_angle_v,
-            light_angle_h.sin(),
-        )
-        .normalize();
+        let light_dir =
+            Vector3::new(light_angle_h.cos(), light_angle_v, light_angle_h.sin()).normalize();
 
         // Rotate cubes for dynamic lighting demonstration
         cube1.set_attitude(time * 0.3, time * 0.5, time * 0.2);
@@ -243,7 +249,10 @@ fn main() {
             let py = (indicator_y as f32 + rad.sin() * indicator_radius) as i32;
             if px >= 0 && px < 800 && py >= 0 && py < 600 {
                 display
-                    .draw_iter(std::iter::once(Pixel(Point::new(px, py), Rgb565::new(5, 5, 5))))
+                    .draw_iter(std::iter::once(Pixel(
+                        Point::new(px, py),
+                        Rgb565::new(5, 5, 5),
+                    )))
                     .ok();
             }
         }

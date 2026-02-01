@@ -7,13 +7,13 @@
 //!
 //! Press SPACE to cycle through render modes
 
-use embedded_gfx::draw::draw;
-use embedded_gfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_gfx::K3dengine;
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::draw::draw;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use nalgebra::Point3;
 use std::thread;
@@ -60,11 +60,12 @@ fn make_cube_faces() -> Vec<[usize; 3]> {
 fn main() {
     let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(640, 480));
 
-    let output_settings = OutputSettingsBuilder::new()
-        .scale(1)
-        .build();
+    let output_settings = OutputSettingsBuilder::new().scale(1).build();
 
-    let mut window = Window::new("Basic Rendering - Press SPACE to change render mode", &output_settings);
+    let mut window = Window::new(
+        "Basic Rendering - Press SPACE to change render mode",
+        &output_settings,
+    );
 
     // Create 3D engine
     let mut engine = K3dengine::new(640, 480);
@@ -81,6 +82,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut cube = K3dMesh::new(geometry);
@@ -108,19 +111,17 @@ fn main() {
         // Handle events
         for event in window.events() {
             match event {
-                SimulatorEvent::KeyDown { keycode, .. } => {
-                    match keycode {
-                        Keycode::Space => {
-                            current_mode = (current_mode + 1) % modes.len();
-                            cube.set_render_mode(modes[current_mode].1.clone());
-                            println!("Render mode: {}", modes[current_mode].0);
-                        }
-                        Keycode::Escape => {
-                            break 'running;
-                        }
-                        _ => {}
+                SimulatorEvent::KeyDown { keycode, .. } => match keycode {
+                    Keycode::Space => {
+                        current_mode = (current_mode + 1) % modes.len();
+                        cube.set_render_mode(modes[current_mode].1.clone());
+                        println!("Render mode: {}", modes[current_mode].0);
                     }
-                }
+                    Keycode::Escape => {
+                        break 'running;
+                    }
+                    _ => {}
+                },
                 SimulatorEvent::Quit => break 'running,
                 _ => {}
             }

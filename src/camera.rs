@@ -45,10 +45,37 @@ impl Camera {
         self.update_projection();
     }
 
+    pub fn set_near(&mut self, near: f32) {
+        self.near = near;
+
+        self.update_projection();
+    }
+
     pub fn set_far(&mut self, far: f32) {
         self.far = far;
 
         self.update_projection();
+    }
+
+    /// Set both near and far planes (for better Z-buffer precision)
+    ///
+    /// **Important**: Keep the near/far ratio as small as possible to reduce Z-fighting.
+    /// A ratio of 20:1 or less is recommended. For example:
+    /// - Small scene (0.5-10 units): near=0.5, far=10.0 (20:1)
+    /// - Medium scene (1-15 units): near=1.0, far=15.0 (15:1)
+    /// - Large scene (2-20 units): near=2.0, far=20.0 (10:1)
+    ///
+    /// See `ZBUFFER_TUNING.md` for detailed guidance.
+    pub fn set_near_far(&mut self, near: f32, far: f32) {
+        self.near = near;
+        self.far = far;
+
+        self.update_projection();
+    }
+
+    /// Get the current near/far ratio (lower is better for Z-buffer precision)
+    pub fn get_near_far_ratio(&self) -> f32 {
+        self.far / self.near
     }
 
     pub fn set_target(&mut self, target: Point3<f32>) {

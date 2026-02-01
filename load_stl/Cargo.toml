@@ -10,4 +10,4 @@ proc-macro = true
 
 [dependencies]
 stl_io = "0.8.5"
-embedded-gfx = {path = ".."}
+embedded-3dgfx = {path = ".."}

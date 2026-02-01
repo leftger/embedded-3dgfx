@@ -17,12 +17,15 @@ use nalgebra::ComplexField;
 pub mod animation;
 pub mod billboard;
 pub mod camera;
+pub mod display_backend;
 pub mod draw;
 pub mod framebuffer;
 pub mod lut;
 pub mod mesh;
 pub mod painters;
 pub mod perfcounter;
+pub mod swapchain;
+pub mod texture;
 
 #[derive(Debug, Clone)]
 pub enum DrawPrimitive {
@@ -42,6 +45,17 @@ pub enum DrawPrimitive {
         points: [Point2<i32>; 3],
         depths: [f32; 3],
         colors: [Rgb565; 3],
+    },
+    TexturedTriangle {
+        points: [Point2<i32>; 3],
+        uvs: [[f32; 2]; 3],
+        texture_id: u32,
+    },
+    TexturedTriangleWithDepth {
+        points: [Point2<i32>; 3],
+        depths: [f32; 3],
+        uvs: [[f32; 2]; 3],
+        texture_id: u32,
     },
 }
 
@@ -312,14 +326,17 @@ impl K3dengine {
                             let half_vector = (light_dir_normalized + view_dir).normalize();
 
                             // Diffuse term: N·L
-                            let diffuse_intensity = normalized_normal.dot(&light_dir_normalized).max(0.0);
+                            let diffuse_intensity =
+                                normalized_normal.dot(&light_dir_normalized).max(0.0);
 
                             // Specular term: (N·H)^shininess
-                            let specular_term = normalized_normal.dot(&half_vector).max(0.0).powf(shininess);
+                            let specular_term =
+                                normalized_normal.dot(&half_vector).max(0.0).powf(shininess);
 
                             // Compute final color: ambient + diffuse + specular
                             let diffuse_color = color_as_float * diffuse_intensity;
-                            let specular_color = Vector3::new(1.0, 1.0, 1.0) * specular_term * specular_intensity;
+                            let specular_color =
+                                Vector3::new(1.0, 1.0, 1.0) * specular_term * specular_intensity;
                             let final_color = ambient_color + diffuse_color + specular_color;
 
                             let final_color = Vector3::new(
@@ -345,11 +362,9 @@ impl K3dengine {
                 RenderMode::Solid => {
                     if geometry.normals.is_empty() {
                         for face in geometry.faces.iter() {
-                            if let Some([p1, p2, p3]) = self.transform_points(
-                                face,
-                                geometry.vertices,
-                                transform_matrix,
-                            ) {
+                            if let Some([p1, p2, p3]) =
+                                self.transform_points(face, geometry.vertices, transform_matrix)
+                            {
                                 callback(DrawPrimitive::ColoredTriangleWithDepth {
                                     points: [p1.xy(), p2.xy(), p3.xy()],
                                     depths: [p1.z as f32, p2.z as f32, p3.z as f32],
@@ -358,8 +373,7 @@ impl K3dengine {
                             }
                         }
                     } else {
-                        for (face, normal) in geometry.faces.iter().zip(geometry.normals)
-                        {
+                        for (face, normal) in geometry.faces.iter().zip(geometry.normals) {
                             //Backface culling
                             let normal = Vector3::new(normal[0], normal[1], normal[2]);
 
@@ -370,11 +384,9 @@ impl K3dengine {
                                 continue;
                             }
 
-                            if let Some([p1, p2, p3]) = self.transform_points(
-                                face,
-                                geometry.vertices,
-                                transform_matrix,
-                            ) {
+                            if let Some([p1, p2, p3]) =
+                                self.transform_points(face, geometry.vertices, transform_matrix)
+                            {
                                 callback(DrawPrimitive::ColoredTriangleWithDepth {
                                     points: [p1.xy(), p2.xy(), p3.xy()],
                                     depths: [p1.z as f32, p2.z as f32, p3.z as f32],
@@ -473,11 +485,7 @@ mod tests {
         let engine = K3dengine::new(640, 480);
         let transform_matrix = engine.camera.vp_matrix;
 
-        let vertices = [
-            [0.0, 0.0, -5.0],
-            [0.1, 0.0, -5.0],
-            [0.0, 0.1, -5.0],
-        ];
+        let vertices = [[0.0, 0.0, -5.0], [0.1, 0.0, -5.0], [0.0, 0.1, -5.0]];
         let indices = [0, 1, 2];
 
         let result = engine.transform_points(&indices, &vertices, transform_matrix);
@@ -499,6 +507,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
         let mesh = mesh::K3dMesh::new(geometry);
 
@@ -515,10 +525,7 @@ mod tests {
     fn test_render_points_mode() {
         let engine = K3dengine::new(640, 480);
 
-        let vertices = [
-            [0.0, 0.0, -5.0],
-            [0.5, 0.0, -5.0],
-        ];
+        let vertices = [[0.0, 0.0, -5.0], [0.5, 0.0, -5.0]];
 
         let geometry = mesh::Geometry {
             vertices: &vertices,
@@ -526,6 +533,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut mesh = mesh::K3dMesh::new(geometry);
@@ -547,11 +556,7 @@ mod tests {
     fn test_render_lines_mode_with_faces() {
         let engine = K3dengine::new(640, 480);
 
-        let vertices = [
-            [0.0, 0.0, -5.0],
-            [0.5, 0.0, -5.0],
-            [0.0, 0.5, -5.0],
-        ];
+        let vertices = [[0.0, 0.0, -5.0], [0.5, 0.0, -5.0], [0.0, 0.5, -5.0]];
 
         let faces = [[0, 1, 2]];
 
@@ -561,6 +566,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut mesh = mesh::K3dMesh::new(geometry);

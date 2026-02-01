@@ -1,9 +1,9 @@
-//! Integration tests for embedded-gfx
+//! Integration tests for embedded-3dgfx
 //! These tests verify the full rendering pipeline works correctly
 
-use embedded_gfx::draw::draw;
-use embedded_gfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_gfx::K3dengine;
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::draw::draw;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_graphics_core::pixelcolor::Rgb565;
 use embedded_graphics_core::prelude::*;
 use nalgebra::{Point3, Vector3};
@@ -59,11 +59,7 @@ impl OriginDimensions for TestFramebuffer {
 fn test_full_rendering_pipeline_points() {
     let engine = K3dengine::new(640, 480);
 
-    let vertices = [
-        [0.0, 0.0, -5.0],
-        [1.0, 0.0, -5.0],
-        [0.0, 1.0, -5.0],
-    ];
+    let vertices = [[0.0, 0.0, -5.0], [1.0, 0.0, -5.0], [0.0, 1.0, -5.0]];
 
     let geometry = Geometry {
         vertices: &vertices,
@@ -71,6 +67,8 @@ fn test_full_rendering_pipeline_points() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -91,11 +89,7 @@ fn test_full_rendering_pipeline_points() {
 fn test_full_rendering_pipeline_lines() {
     let engine = K3dengine::new(640, 480);
 
-    let vertices = [
-        [0.0, 0.0, -5.0],
-        [0.5, 0.0, -5.0],
-        [0.0, 0.5, -5.0],
-    ];
+    let vertices = [[0.0, 0.0, -5.0], [0.5, 0.0, -5.0], [0.0, 0.5, -5.0]];
 
     let faces = [[0, 1, 2]];
 
@@ -105,6 +99,8 @@ fn test_full_rendering_pipeline_lines() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -125,11 +121,7 @@ fn test_full_rendering_pipeline_lines() {
 fn test_full_rendering_pipeline_solid() {
     let engine = K3dengine::new(640, 480);
 
-    let vertices = [
-        [0.0, 0.0, -5.0],
-        [0.5, 0.0, -5.0],
-        [0.0, 0.5, -5.0],
-    ];
+    let vertices = [[0.0, 0.0, -5.0], [0.5, 0.0, -5.0], [0.0, 0.5, -5.0]];
 
     let faces = [[0, 1, 2]];
 
@@ -139,6 +131,8 @@ fn test_full_rendering_pipeline_solid() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -166,6 +160,8 @@ fn test_multiple_meshes() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
     let mut mesh1 = K3dMesh::new(geometry1);
     mesh1.set_render_mode(RenderMode::Points);
@@ -177,6 +173,8 @@ fn test_multiple_meshes() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
     let mut mesh2 = K3dMesh::new(geometry2);
     mesh2.set_render_mode(RenderMode::Points);
@@ -202,6 +200,8 @@ fn test_mesh_transformation() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -229,6 +229,8 @@ fn test_mesh_scaling() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -249,11 +251,7 @@ fn test_mesh_scaling() {
 fn test_backface_culling() {
     let engine = K3dengine::new(640, 480);
 
-    let vertices = [
-        [0.0, 0.0, -5.0],
-        [0.5, 0.0, -5.0],
-        [0.0, 0.5, -5.0],
-    ];
+    let vertices = [[0.0, 0.0, -5.0], [0.5, 0.0, -5.0], [0.0, 0.5, -5.0]];
 
     let faces = [[0, 1, 2]];
 
@@ -266,6 +264,8 @@ fn test_backface_culling() {
         colors: &[],
         lines: &[],
         normals: &normals,
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -294,6 +294,8 @@ fn test_camera_movement() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -325,6 +327,8 @@ fn test_out_of_view_culling() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -344,11 +348,7 @@ fn test_out_of_view_culling() {
 fn test_lighting_mode() {
     let engine = K3dengine::new(640, 480);
 
-    let vertices = [
-        [0.0, 0.0, -5.0],
-        [0.5, 0.0, -5.0],
-        [0.0, 0.5, -5.0],
-    ];
+    let vertices = [[0.0, 0.0, -5.0], [0.5, 0.0, -5.0], [0.0, 0.5, -5.0]];
 
     let faces = [[0, 1, 2]];
     let normals = [[0.0, 0.0, -1.0]]; // Normal pointing toward camera
@@ -359,6 +359,8 @@ fn test_lighting_mode() {
         colors: &[],
         lines: &[],
         normals: &normals,
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -390,6 +392,8 @@ fn test_colored_vertices() {
         colors: &colors,
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);
@@ -409,11 +413,7 @@ fn test_colored_vertices() {
 fn test_lines_from_explicit_edges() {
     let engine = K3dengine::new(640, 480);
 
-    let vertices = [
-        [0.0, 0.0, -5.0],
-        [0.5, 0.0, -5.0],
-        [0.0, 0.5, -5.0],
-    ];
+    let vertices = [[0.0, 0.0, -5.0], [0.5, 0.0, -5.0], [0.0, 0.5, -5.0]];
 
     let lines = [[0, 1], [1, 2]];
 
@@ -423,6 +423,8 @@ fn test_lines_from_explicit_edges() {
         colors: &[],
         lines: &lines,
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut mesh = K3dMesh::new(geometry);

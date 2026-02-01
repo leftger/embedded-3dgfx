@@ -11,17 +11,17 @@
 //! - R: Reset animation time
 //! - ESC: Exit
 
-use embedded_gfx::animation::{Keyframe, VertexAnimation};
-use embedded_gfx::draw::draw_zbuffered;
-use embedded_gfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_gfx::perfcounter::PerformanceCounter;
-use embedded_gfx::K3dengine;
-use embedded_graphics::mono_font::{ascii::FONT_6X10, MonoTextStyle};
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::animation::{Keyframe, VertexAnimation};
+use embedded_3dgfx::draw::draw_zbuffered;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::perfcounter::PerformanceCounter;
+use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor, WebColors};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use nalgebra::Point3;
 use std::f32::consts::PI;
@@ -50,8 +50,14 @@ fn main() {
 
     // Create cube keyframes (pulsing animation)
     let cube_base = [
-        [-1.0, -1.0, -1.0], [1.0, -1.0, -1.0], [1.0, 1.0, -1.0], [-1.0, 1.0, -1.0],
-        [-1.0, -1.0, 1.0], [1.0, -1.0, 1.0], [1.0, 1.0, 1.0], [-1.0, 1.0, 1.0],
+        [-1.0, -1.0, -1.0],
+        [1.0, -1.0, -1.0],
+        [1.0, 1.0, -1.0],
+        [-1.0, 1.0, -1.0],
+        [-1.0, -1.0, 1.0],
+        [1.0, -1.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [-1.0, 1.0, 1.0],
     ];
 
     let mut cube_expanded = cube_base;
@@ -62,20 +68,35 @@ fn main() {
     }
 
     let cube_keyframes = [
-        Keyframe { vertices: &cube_base, time: 0.0 },
-        Keyframe { vertices: &cube_expanded, time: 0.5 },
-        Keyframe { vertices: &cube_base, time: 1.0 },
+        Keyframe {
+            vertices: &cube_base,
+            time: 0.0,
+        },
+        Keyframe {
+            vertices: &cube_expanded,
+            time: 0.5,
+        },
+        Keyframe {
+            vertices: &cube_base,
+            time: 1.0,
+        },
     ];
 
     let cube_animation = VertexAnimation::new(&cube_keyframes, true);
 
     let cube_faces = [
-        [0, 1, 2], [0, 2, 3], // Front
-        [1, 5, 6], [1, 6, 2], // Right
-        [5, 4, 7], [5, 7, 6], // Back
-        [4, 0, 3], [4, 3, 7], // Left
-        [3, 2, 6], [3, 6, 7], // Top
-        [4, 5, 1], [4, 1, 0], // Bottom
+        [0, 1, 2],
+        [0, 2, 3], // Front
+        [1, 5, 6],
+        [1, 6, 2], // Right
+        [5, 4, 7],
+        [5, 7, 6], // Back
+        [4, 0, 3],
+        [4, 3, 7], // Left
+        [3, 2, 6],
+        [3, 6, 7], // Top
+        [4, 5, 1],
+        [4, 1, 0], // Bottom
     ];
 
     // Create animated vertices buffer
@@ -89,11 +110,7 @@ fn main() {
 
     for y in 0..flag_height {
         for x in 0..flag_width {
-            flag_base_verts.push([
-                x as f32 * 0.4 - 2.0,
-                y as f32 * 0.4 - 1.2,
-                0.0,
-            ]);
+            flag_base_verts.push([x as f32 * 0.4 - 2.0, y as f32 * 0.4 - 1.2, 0.0]);
         }
     }
 
@@ -123,10 +140,22 @@ fn main() {
     }
 
     let flag_keyframes = [
-        Keyframe { vertices: &flag_base_verts, time: 0.0 },
-        Keyframe { vertices: &flag_wave1, time: 0.5 },
-        Keyframe { vertices: &flag_wave2, time: 1.0 },
-        Keyframe { vertices: &flag_base_verts, time: 1.5 },
+        Keyframe {
+            vertices: &flag_base_verts,
+            time: 0.0,
+        },
+        Keyframe {
+            vertices: &flag_wave1,
+            time: 0.5,
+        },
+        Keyframe {
+            vertices: &flag_wave2,
+            time: 1.0,
+        },
+        Keyframe {
+            vertices: &flag_base_verts,
+            time: 1.5,
+        },
     ];
 
     let flag_animation = VertexAnimation::new(&flag_keyframes, true);
@@ -189,9 +218,18 @@ fn main() {
     }
 
     let morph_keyframes = [
-        Keyframe { vertices: &sphere_verts, time: 0.0 },
-        Keyframe { vertices: &cube_morph_verts, time: 1.0 },
-        Keyframe { vertices: &sphere_verts, time: 2.0 },
+        Keyframe {
+            vertices: &sphere_verts,
+            time: 0.0,
+        },
+        Keyframe {
+            vertices: &cube_morph_verts,
+            time: 1.0,
+        },
+        Keyframe {
+            vertices: &sphere_verts,
+            time: 2.0,
+        },
     ];
 
     let morph_animation = VertexAnimation::new(&morph_keyframes, true);
@@ -220,7 +258,10 @@ fn main() {
                     Keycode::Escape => break 'running,
                     Keycode::Space => {
                         anim_playing = !anim_playing;
-                        println!("Animation: {}", if anim_playing { "PLAYING" } else { "PAUSED" });
+                        println!(
+                            "Animation: {}",
+                            if anim_playing { "PLAYING" } else { "PAUSED" }
+                        );
                     }
                     Keycode::R => {
                         anim_time = 0.0;
@@ -251,6 +292,8 @@ fn main() {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut cube = K3dMesh::new(cube_geom);
@@ -264,6 +307,8 @@ fn main() {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut flag = K3dMesh::new(flag_geom);
@@ -277,7 +322,9 @@ fn main() {
             colors: &[],
             lines: &[],
             normals: &[],
-            };
+            uvs: &[],
+            texture_id: None,
+        };
 
         let mut morph = K3dMesh::new(morph_geom);
         morph.set_position(3.5, 0.0, 0.0);

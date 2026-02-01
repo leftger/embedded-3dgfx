@@ -15,16 +15,16 @@
 //! - Arrow Left/Right: Strafe left/right
 //! - ESC: Exit
 
-use embedded_gfx::draw::draw_zbuffered;
-use embedded_gfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_gfx::perfcounter::PerformanceCounter;
-use embedded_gfx::K3dengine;
-use embedded_graphics::mono_font::{ascii::FONT_6X10, MonoTextStyle};
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::draw::draw_zbuffered;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::perfcounter::PerformanceCounter;
+use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use load_stl::embed_stl;
 use nalgebra::Point3;
@@ -56,7 +56,10 @@ fn main() {
 
     let output_settings = OutputSettingsBuilder::new().scale(1).build();
 
-    let mut window = Window::new("STL Viewer - WASD to move, Arrows to look", &output_settings);
+    let mut window = Window::new(
+        "STL Viewer - WASD to move, Arrows to look",
+        &output_settings,
+    );
 
     // Create 3D engine
     let mut engine = K3dengine::new(800, 600);
@@ -70,6 +73,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     });
     ground.set_color(Rgb565::new(0, 15, 0)); // Dim green
 
@@ -213,9 +218,12 @@ fn main() {
         zbuffer.fill(u32::MAX);
 
         // Render all meshes with Z-buffering
-        engine.render([&ground, &teapot, &suzanne, &blahaj].iter().copied(), |prim| {
-            draw_zbuffered(prim, &mut display, &mut zbuffer, 800);
-        });
+        engine.render(
+            [&ground, &teapot, &suzanne, &blahaj].iter().copied(),
+            |prim| {
+                draw_zbuffered(prim, &mut display, &mut zbuffer, 800);
+            },
+        );
 
         // Display performance info
         perf.print();
@@ -233,7 +241,8 @@ fn main() {
             .unwrap();
 
         // Help text at bottom
-        let help_text = "W/S: Move | A/D: Turn | Q/E: Look Up/Down | Left/Right: Strafe | ESC: Exit";
+        let help_text =
+            "W/S: Move | A/D: Turn | Q/E: Look Up/Down | Left/Right: Strafe | ESC: Exit";
         Text::new(help_text, Point::new(10, 580), text_style)
             .draw(&mut display)
             .unwrap();

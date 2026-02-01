@@ -6,6 +6,155 @@ use heapless::Vec;
 
 use crate::DrawPrimitive;
 
+/// Depth epsilon for Z-buffer comparison to prevent Z-fighting
+///
+/// When triangles are nearly coplanar or edge-on to the camera, floating-point
+/// precision errors can cause depth values to be extremely close, leading to
+/// flickering (Z-fighting). This epsilon provides a small bias that helps
+/// new pixels pass the depth test when they are very close to existing ones.
+///
+/// Value: 128 in 16.16 fixed-point format = 0.00195 in floating-point
+/// Tuned for typical embedded graphics scenarios. Increase if Z-fighting persists,
+/// decrease if you notice incorrect depth ordering on distant objects.
+///
+/// **Tuning guide:**
+/// - More Z-fighting? Increase this value (256, 512, etc.)
+/// - Incorrect depth ordering? Decrease this value (64, 32, etc.)
+/// - Adjust camera near/far planes for better depth precision distribution
+const DEPTH_EPSILON: u32 = 128;
+
+/// Configuration for depth-based fog effect
+#[derive(Debug, Clone, Copy)]
+pub struct FogConfig {
+    /// Fog color to blend towards
+    pub color: embedded_graphics_core::pixelcolor::Rgb565,
+    /// Near plane distance (fixed-point 16.16 format)
+    pub near: u32,
+    /// Far plane distance (fixed-point 16.16 format)
+    pub far: u32,
+}
+
+impl FogConfig {
+    /// Create a new fog configuration
+    ///
+    /// # Arguments
+    /// * `color` - The fog color
+    /// * `near` - Near distance (depth values closer than this have no fog)
+    /// * `far` - Far distance (depth values farther than this are fully fogged)
+    pub fn new(color: embedded_graphics_core::pixelcolor::Rgb565, near: f32, far: f32) -> Self {
+        Self {
+            color,
+            near: (near * 65536.0) as u32,
+            far: (far * 65536.0) as u32,
+        }
+    }
+
+    /// Apply fog effect to a color based on depth
+    #[inline]
+    pub fn apply(
+        &self,
+        base_color: embedded_graphics_core::pixelcolor::Rgb565,
+        depth: u32,
+    ) -> embedded_graphics_core::pixelcolor::Rgb565 {
+        // Calculate fog factor: 0.0 at near plane, 1.0 at far plane
+        let fog_factor = if depth <= self.near {
+            0u32
+        } else if depth >= self.far {
+            65536u32 // 1.0 in fixed-point
+        } else {
+            // Linear interpolation: (depth - near) / (far - near)
+            let numerator = (depth - self.near) as u64;
+            let denominator = (self.far - self.near) as u64;
+            ((numerator * 65536) / denominator) as u32
+        };
+
+        // Blend base color with fog color
+        // final_color = base_color * (1 - fog_factor) + fog_color * fog_factor
+        let base_r = base_color.r() as u32;
+        let base_g = base_color.g() as u32;
+        let base_b = base_color.b() as u32;
+
+        let fog_r = self.color.r() as u32;
+        let fog_g = self.color.g() as u32;
+        let fog_b = self.color.b() as u32;
+
+        // fog_factor is in 16.16 fixed-point format
+        let r = ((base_r * (65536 - fog_factor) + fog_r * fog_factor) / 65536) as u8;
+        let g = ((base_g * (65536 - fog_factor) + fog_g * fog_factor) / 65536) as u8;
+        let b = ((base_b * (65536 - fog_factor) + fog_b * fog_factor) / 65536) as u8;
+
+        embedded_graphics_core::pixelcolor::Rgb565::new(r, g, b)
+    }
+}
+
+/// Configuration for ordered dithering effect
+#[derive(Debug, Clone, Copy)]
+pub struct DitherConfig {
+    /// Dithering intensity (0-255, where 0 is no dithering)
+    pub intensity: u8,
+}
+
+impl DitherConfig {
+    /// 4x4 Bayer matrix for ordered dithering
+    /// Values are in range [0, 15] and will be scaled by intensity
+    const BAYER_MATRIX: [[u8; 4]; 4] =
+        [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+
+    /// Create a new dither configuration
+    pub fn new(intensity: u8) -> Self {
+        Self { intensity }
+    }
+
+    /// Apply dithering effect to a color based on screen position
+    #[inline]
+    pub fn apply(
+        &self,
+        color: embedded_graphics_core::pixelcolor::Rgb565,
+        x: i32,
+        y: i32,
+    ) -> embedded_graphics_core::pixelcolor::Rgb565 {
+        if self.intensity == 0 {
+            return color;
+        }
+
+        // Get threshold from Bayer matrix (tiles every 4x4 pixels)
+        let matrix_x = (x & 3) as usize;
+        let matrix_y = (y & 3) as usize;
+        let threshold = Self::BAYER_MATRIX[matrix_y][matrix_x];
+
+        // Scale threshold by intensity
+        // threshold is 0-15, intensity is 0-255
+        // Combined threshold is in range 0-255
+        let scaled_threshold = ((threshold as u16 * self.intensity as u16) / 15) as u8;
+
+        // Apply threshold to each color channel
+        let r = color.r();
+        let g = color.g();
+        let b = color.b();
+
+        // Add dithering noise (can increase or decrease based on threshold)
+        let r = if r > scaled_threshold {
+            r.saturating_sub(scaled_threshold / 2)
+        } else {
+            r.saturating_add(scaled_threshold / 2)
+        };
+
+        let g = if g > scaled_threshold {
+            g.saturating_sub(scaled_threshold / 2)
+        } else {
+            g.saturating_add(scaled_threshold / 2)
+        };
+
+        let b = if b > scaled_threshold {
+            b.saturating_sub(scaled_threshold / 2)
+        } else {
+            b.saturating_add(scaled_threshold / 2)
+        };
+
+        embedded_graphics_core::pixelcolor::Rgb565::new(r, g, b)
+    }
+}
+
 #[inline]
 pub fn draw<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
     primitive: DrawPrimitive,
@@ -61,7 +210,11 @@ pub fn draw<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
                 fill_top_flat_triangle(p2, p4, p3, color, fb);
             }
         }
-        DrawPrimitive::ColoredTriangleWithDepth { points, depths: _, color } => {
+        DrawPrimitive::ColoredTriangleWithDepth {
+            points,
+            depths: _,
+            color,
+        } => {
             // This variant should use draw_zbuffered() instead
             // For compatibility, render without Z-buffering (ignoring depths)
             let mut vertices = points;
@@ -98,7 +251,10 @@ pub fn draw<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
                 fill_top_flat_triangle(p2, p4, p3, color, fb);
             }
         }
-        DrawPrimitive::GouraudTriangle { mut points, mut colors } => {
+        DrawPrimitive::GouraudTriangle {
+            mut points,
+            mut colors,
+        } => {
             // Sort vertices by y coordinate (and corresponding colors)
             if points[0].y > points[1].y {
                 points.swap(0, 1);
@@ -128,10 +284,7 @@ pub fn draw<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
             } else {
                 // Split triangle into two flat triangles
                 let t = (p2.y - p1.y) as f32 / (p3.y - p1.y) as f32;
-                let p4 = Point::new(
-                    (p1.x as f32 + t * (p3.x - p1.x) as f32) as i32,
-                    p2.y,
-                );
+                let p4 = Point::new((p1.x as f32 + t * (p3.x - p1.x) as f32) as i32, p2.y);
                 // Interpolate color at split point
                 let c4 = interpolate_color(c1, c3, t);
 
@@ -139,11 +292,21 @@ pub fn draw<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
                 fill_top_flat_gouraud(p2, p4, p3, c2, c4, c3, fb);
             }
         }
-        DrawPrimitive::GouraudTriangleWithDepth { points, depths: _, colors } => {
+        DrawPrimitive::GouraudTriangleWithDepth {
+            points,
+            depths: _,
+            colors,
+        } => {
             // This variant should use draw_zbuffered() instead
             // For compatibility, render without Z-buffering (ignoring depths)
             let prim = DrawPrimitive::GouraudTriangle { points, colors };
             draw(prim, fb);
+        }
+        DrawPrimitive::TexturedTriangle { .. }
+        | DrawPrimitive::TexturedTriangleWithDepth { .. } => {
+            // Textured triangles require a texture manager
+            // Use draw_zbuffered_with_textures() instead
+            // Cannot render without texture manager, so this is a no-op
         }
     }
 }
@@ -340,8 +503,11 @@ fn draw_horizontal_line_gouraud<D: DrawTarget<Color = embedded_graphics_core::pi
     let width = (end - start) as f32;
 
     if width == 0.0 {
-        fb.draw_iter([embedded_graphics_core::Pixel(Point::new(start, p1.y), color1)])
-            .unwrap();
+        fb.draw_iter([embedded_graphics_core::Pixel(
+            Point::new(start, p1.y),
+            color1,
+        )])
+        .unwrap();
         return;
     }
 
@@ -364,8 +530,31 @@ pub fn draw_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::
 ) where
     <D as DrawTarget>::Error: Debug,
 {
+    // Call with no effects for backward compatibility
+    draw_zbuffered_with_effects(primitive, fb, zbuffer, width, None, None);
+}
+
+// Z-buffered drawing function with optional fog and dithering effects
+// Requires a TextureManager for textured primitives
+#[inline]
+pub fn draw_zbuffered_with_effects<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
+    primitive: DrawPrimitive,
+    fb: &mut D,
+    zbuffer: &mut [u32],
+    width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
+) where
+    <D as DrawTarget>::Error: Debug,
+{
     match primitive {
-        DrawPrimitive::ColoredTriangleWithDepth { mut points, mut depths, color } => {
+        DrawPrimitive::ColoredTriangleWithDepth {
+            mut points,
+            mut depths,
+            color,
+        } => {
             // Sort vertices by y coordinate (and corresponding depths)
             if points[0].y > points[1].y {
                 points.swap(0, 1);
@@ -383,9 +572,26 @@ pub fn draw_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::
             let [p1, p2, p3] = points;
             let [z1, z2, z3] = depths;
 
-            fill_triangle_zbuffered(p1, p2, p3, z1, z2, z3, color, fb, zbuffer, width);
+            fill_triangle_zbuffered(
+                p1,
+                p2,
+                p3,
+                z1,
+                z2,
+                z3,
+                color,
+                fb,
+                zbuffer,
+                width,
+                fog_config,
+                dither_config,
+            );
         }
-        DrawPrimitive::GouraudTriangleWithDepth { mut points, mut depths, mut colors } => {
+        DrawPrimitive::GouraudTriangleWithDepth {
+            mut points,
+            mut depths,
+            mut colors,
+        } => {
             // Sort vertices by y coordinate (and corresponding depths and colors)
             if points[0].y > points[1].y {
                 points.swap(0, 1);
@@ -407,10 +613,101 @@ pub fn draw_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::
             let [z1, z2, z3] = depths;
             let [c1, c2, c3] = colors;
 
-            fill_triangle_zbuffered_gouraud(p1, p2, p3, z1, z2, z3, c1, c2, c3, fb, zbuffer, width);
+            fill_triangle_zbuffered_gouraud(
+                p1,
+                p2,
+                p3,
+                z1,
+                z2,
+                z3,
+                c1,
+                c2,
+                c3,
+                fb,
+                zbuffer,
+                width,
+                fog_config,
+                dither_config,
+            );
+        }
+        // Textured triangles require texture manager - fall back to regular drawing
+        DrawPrimitive::TexturedTriangle { .. }
+        | DrawPrimitive::TexturedTriangleWithDepth { .. } => {
+            // These variants require a texture manager which isn't provided here
+            // Use draw_zbuffered_with_textures() instead
         }
         // For other primitives, fall back to regular drawing
         _ => draw(primitive, fb),
+    }
+}
+
+// Z-buffered drawing function with textures, fog, and dithering effects
+#[inline]
+pub fn draw_zbuffered_with_textures<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+    const N: usize,
+>(
+    primitive: DrawPrimitive,
+    fb: &mut D,
+    zbuffer: &mut [u32],
+    width: usize,
+    texture_manager: &crate::texture::TextureManager<N>,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
+) where
+    <D as DrawTarget>::Error: Debug,
+{
+    match primitive {
+        DrawPrimitive::TexturedTriangleWithDepth {
+            mut points,
+            mut depths,
+            mut uvs,
+            texture_id,
+        } => {
+            // Get texture from manager
+            if let Some(texture) = texture_manager.get(texture_id) {
+                // Sort vertices by y coordinate (and corresponding depths and UVs)
+                if points[0].y > points[1].y {
+                    points.swap(0, 1);
+                    depths.swap(0, 1);
+                    uvs.swap(0, 1);
+                }
+                if points[0].y > points[2].y {
+                    points.swap(0, 2);
+                    depths.swap(0, 2);
+                    uvs.swap(0, 2);
+                }
+                if points[1].y > points[2].y {
+                    points.swap(1, 2);
+                    depths.swap(1, 2);
+                    uvs.swap(1, 2);
+                }
+
+                let [p1, p2, p3] = points;
+                let [z1, z2, z3] = depths;
+                let [uv1, uv2, uv3] = uvs;
+
+                fill_triangle_zbuffered_textured(
+                    p1,
+                    p2,
+                    p3,
+                    z1,
+                    z2,
+                    z3,
+                    uv1,
+                    uv2,
+                    uv3,
+                    texture,
+                    fb,
+                    zbuffer,
+                    width,
+                    fog_config,
+                    dither_config,
+                );
+            }
+        }
+        // For other primitives, fall back to regular z-buffered drawing
+        _ => draw_zbuffered_with_effects(primitive, fb, zbuffer, width, fog_config, dither_config),
     }
 }
 
@@ -426,6 +723,8 @@ fn fill_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelco
     fb: &mut D,
     zbuffer: &mut [u32],
     width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
 ) where
     <D as DrawTarget>::Error: Debug,
 {
@@ -441,9 +740,35 @@ fn fill_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelco
 
     // Handle flat triangles
     if p2_eg.y == p3_eg.y {
-        fill_bottom_flat_triangle_zbuffered(p1_eg, p2_eg, p3_eg, z1_int, z2_int, z3_int, color, fb, zbuffer, width);
+        fill_bottom_flat_triangle_zbuffered(
+            p1_eg,
+            p2_eg,
+            p3_eg,
+            z1_int,
+            z2_int,
+            z3_int,
+            color,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
     } else if p1_eg.y == p2_eg.y {
-        fill_top_flat_triangle_zbuffered(p1_eg, p2_eg, p3_eg, z1_int, z2_int, z3_int, color, fb, zbuffer, width);
+        fill_top_flat_triangle_zbuffered(
+            p1_eg,
+            p2_eg,
+            p3_eg,
+            z1_int,
+            z2_int,
+            z3_int,
+            color,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
     } else {
         // Split into two flat triangles
         let t = (p2_eg.y - p1_eg.y) as f32 / (p3_eg.y - p1_eg.y) as f32;
@@ -453,14 +778,42 @@ fn fill_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelco
         );
         let z4_int = (z1_int as i64 + (t * (z3_int as i64 - z1_int as i64) as f32) as i64) as u32;
 
-        fill_bottom_flat_triangle_zbuffered(p1_eg, p2_eg, p4, z1_int, z2_int, z4_int, color, fb, zbuffer, width);
-        fill_top_flat_triangle_zbuffered(p2_eg, p4, p3_eg, z2_int, z4_int, z3_int, color, fb, zbuffer, width);
+        fill_bottom_flat_triangle_zbuffered(
+            p1_eg,
+            p2_eg,
+            p4,
+            z1_int,
+            z2_int,
+            z4_int,
+            color,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
+        fill_top_flat_triangle_zbuffered(
+            p2_eg,
+            p4,
+            p3_eg,
+            z2_int,
+            z4_int,
+            z3_int,
+            color,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
     }
 }
 
 // Gouraud-shaded triangle with z-buffering
 #[inline(always)]
-fn fill_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
+fn fill_triangle_zbuffered_gouraud<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
     p1: nalgebra::Point2<i32>,
     p2: nalgebra::Point2<i32>,
     p3: nalgebra::Point2<i32>,
@@ -473,6 +826,8 @@ fn fill_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_graphics_core:
     fb: &mut D,
     zbuffer: &mut [u32],
     width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
 ) where
     <D as DrawTarget>::Error: Debug,
 {
@@ -488,9 +843,39 @@ fn fill_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_graphics_core:
 
     // Handle flat triangles
     if p2_eg.y == p3_eg.y {
-        fill_bottom_flat_triangle_zbuffered_gouraud(p1_eg, p2_eg, p3_eg, z1_int, z2_int, z3_int, c1, c2, c3, fb, zbuffer, width);
+        fill_bottom_flat_triangle_zbuffered_gouraud(
+            p1_eg,
+            p2_eg,
+            p3_eg,
+            z1_int,
+            z2_int,
+            z3_int,
+            c1,
+            c2,
+            c3,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
     } else if p1_eg.y == p2_eg.y {
-        fill_top_flat_triangle_zbuffered_gouraud(p1_eg, p2_eg, p3_eg, z1_int, z2_int, z3_int, c1, c2, c3, fb, zbuffer, width);
+        fill_top_flat_triangle_zbuffered_gouraud(
+            p1_eg,
+            p2_eg,
+            p3_eg,
+            z1_int,
+            z2_int,
+            z3_int,
+            c1,
+            c2,
+            c3,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
     } else {
         // Split into two flat triangles
         let t = (p2_eg.y - p1_eg.y) as f32 / (p3_eg.y - p1_eg.y) as f32;
@@ -501,13 +886,45 @@ fn fill_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_graphics_core:
         let z4_int = (z1_int as i64 + (t * (z3_int as i64 - z1_int as i64) as f32) as i64) as u32;
         let c4 = interpolate_color(c1, c3, t);
 
-        fill_bottom_flat_triangle_zbuffered_gouraud(p1_eg, p2_eg, p4, z1_int, z2_int, z4_int, c1, c2, c4, fb, zbuffer, width);
-        fill_top_flat_triangle_zbuffered_gouraud(p2_eg, p4, p3_eg, z2_int, z4_int, z3_int, c2, c4, c3, fb, zbuffer, width);
+        fill_bottom_flat_triangle_zbuffered_gouraud(
+            p1_eg,
+            p2_eg,
+            p4,
+            z1_int,
+            z2_int,
+            z4_int,
+            c1,
+            c2,
+            c4,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
+        fill_top_flat_triangle_zbuffered_gouraud(
+            p2_eg,
+            p4,
+            p3_eg,
+            z2_int,
+            z4_int,
+            z3_int,
+            c2,
+            c4,
+            c3,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
     }
 }
 
 #[inline(always)]
-fn fill_bottom_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
+fn fill_bottom_flat_triangle_zbuffered<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
     p1: Point,
     p2: Point,
     p3: Point,
@@ -518,6 +935,8 @@ fn fill_bottom_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_c
     fb: &mut D,
     zbuffer: &mut [u32],
     width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
 ) where
     <D as DrawTarget>::Error: Debug,
 {
@@ -558,6 +977,8 @@ fn fill_bottom_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_c
             fb,
             zbuffer,
             width,
+            fog_config,
+            dither_config,
         );
 
         curx1 += invslope1;
@@ -566,7 +987,9 @@ fn fill_bottom_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_c
 }
 
 #[inline(always)]
-fn fill_top_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
+fn fill_top_flat_triangle_zbuffered<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
     p1: Point,
     p2: Point,
     p3: Point,
@@ -577,6 +1000,8 @@ fn fill_top_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core
     fb: &mut D,
     zbuffer: &mut [u32],
     width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
 ) where
     <D as DrawTarget>::Error: Debug,
 {
@@ -616,6 +1041,8 @@ fn fill_top_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core
             fb,
             zbuffer,
             width,
+            fog_config,
+            dither_config,
         );
 
         curx1 -= invslope1;
@@ -625,7 +1052,9 @@ fn fill_top_flat_triangle_zbuffered<D: DrawTarget<Color = embedded_graphics_core
 
 // Gouraud shaded bottom-flat triangle with z-buffering
 #[inline(always)]
-fn fill_bottom_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
+fn fill_bottom_flat_triangle_zbuffered_gouraud<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
     p1: Point,
     p2: Point,
     p3: Point,
@@ -638,6 +1067,8 @@ fn fill_bottom_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_gr
     fb: &mut D,
     zbuffer: &mut [u32],
     width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
 ) where
     <D as DrawTarget>::Error: Debug,
 {
@@ -683,6 +1114,8 @@ fn fill_bottom_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_gr
             fb,
             zbuffer,
             width,
+            fog_config,
+            dither_config,
         );
 
         curx1 += invslope1;
@@ -692,7 +1125,9 @@ fn fill_bottom_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_gr
 
 // Gouraud shaded top-flat triangle with z-buffering
 #[inline(always)]
-fn fill_top_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
+fn fill_top_flat_triangle_zbuffered_gouraud<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
     p1: Point,
     p2: Point,
     p3: Point,
@@ -705,6 +1140,8 @@ fn fill_top_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_graph
     fb: &mut D,
     zbuffer: &mut [u32],
     width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
 ) where
     <D as DrawTarget>::Error: Debug,
 {
@@ -750,6 +1187,8 @@ fn fill_top_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_graph
             fb,
             zbuffer,
             width,
+            fog_config,
+            dither_config,
         );
 
         curx1 -= invslope1;
@@ -759,7 +1198,9 @@ fn fill_top_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = embedded_graph
 
 // Draw scanline with Gouraud shading and z-buffering
 #[inline(always)]
-fn draw_scanline_zbuffered_gouraud<D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>>(
+fn draw_scanline_zbuffered_gouraud<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
     x1: i32,
     x2: i32,
     y: i32,
@@ -770,6 +1211,8 @@ fn draw_scanline_zbuffered_gouraud<D: DrawTarget<Color = embedded_graphics_core:
     fb: &mut D,
     zbuffer: &mut [u32],
     width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
 ) where
     <D as DrawTarget>::Error: Debug,
 {
@@ -799,13 +1242,24 @@ fn draw_scanline_zbuffered_gouraud<D: DrawTarget<Color = embedded_graphics_core:
             z1
         };
 
-        // Z-test
-        if z < zbuffer[zbuffer_idx] {
+        // Z-test with epsilon to prevent Z-fighting on nearly coplanar faces
+        // We make the test slightly more permissive by allowing pixels within epsilon range
+        if z < zbuffer[zbuffer_idx].saturating_add(DEPTH_EPSILON) {
             zbuffer[zbuffer_idx] = z;
 
             // Interpolate color
-            let color = interpolate_color(color1, color2, t);
-            fb.draw_iter([embedded_graphics_core::Pixel(Point::new(x, y), color)])
+            let mut final_color = interpolate_color(color1, color2, t);
+
+            // Apply effects in order: fog first, then dithering
+            if let Some(fog) = fog_config {
+                final_color = fog.apply(final_color, z);
+            }
+
+            if let Some(dither) = dither_config {
+                final_color = dither.apply(final_color, x, y);
+            }
+
+            fb.draw_iter([embedded_graphics_core::Pixel(Point::new(x, y), final_color)])
                 .unwrap();
         }
     }
@@ -822,6 +1276,8 @@ fn draw_scanline_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelco
     fb: &mut D,
     zbuffer: &mut [u32],
     width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
 ) where
     <D as DrawTarget>::Error: Debug,
 {
@@ -851,10 +1307,380 @@ fn draw_scanline_zbuffered<D: DrawTarget<Color = embedded_graphics_core::pixelco
             (z1 as i64 + (t_num * z_diff / t_den)) as u32
         };
 
-        // Z-buffer test (closer = smaller depth value)
-        if z < zbuffer[zbuffer_idx] {
+        // Z-buffer test with epsilon to prevent Z-fighting (closer = smaller depth value)
+        // We make the test slightly more permissive by allowing pixels within epsilon range
+        if z < zbuffer[zbuffer_idx].saturating_add(DEPTH_EPSILON) {
             zbuffer[zbuffer_idx] = z;
-            fb.draw_iter([embedded_graphics_core::Pixel(Point::new(x, y), color)])
+
+            // Apply effects in order: fog first, then dithering
+            let mut final_color = color;
+
+            if let Some(fog) = fog_config {
+                final_color = fog.apply(final_color, z);
+            }
+
+            if let Some(dither) = dither_config {
+                final_color = dither.apply(final_color, x, y);
+            }
+
+            fb.draw_iter([embedded_graphics_core::Pixel(Point::new(x, y), final_color)])
+                .unwrap();
+        }
+    }
+}
+
+// Textured triangle rendering with z-buffering
+#[inline(always)]
+fn fill_triangle_zbuffered_textured<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
+    p1: nalgebra::Point2<i32>,
+    p2: nalgebra::Point2<i32>,
+    p3: nalgebra::Point2<i32>,
+    z1: f32,
+    z2: f32,
+    z3: f32,
+    uv1: [f32; 2],
+    uv2: [f32; 2],
+    uv3: [f32; 2],
+    texture: &crate::texture::Texture,
+    fb: &mut D,
+    zbuffer: &mut [u32],
+    width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
+) where
+    <D as DrawTarget>::Error: Debug,
+{
+    // Convert float depths to fixed-point integers (16.16 format)
+    let z1_int = (z1 * 65536.0) as u32;
+    let z2_int = (z2 * 65536.0) as u32;
+    let z3_int = (z3 * 65536.0) as u32;
+
+    // Convert to embedded_graphics Points
+    let p1_eg = Point::new(p1.x, p1.y);
+    let p2_eg = Point::new(p2.x, p2.y);
+    let p3_eg = Point::new(p3.x, p3.y);
+
+    // Handle flat triangles
+    if p2_eg.y == p3_eg.y {
+        fill_bottom_flat_triangle_zbuffered_textured(
+            p1_eg,
+            p2_eg,
+            p3_eg,
+            z1_int,
+            z2_int,
+            z3_int,
+            uv1,
+            uv2,
+            uv3,
+            texture,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
+    } else if p1_eg.y == p2_eg.y {
+        fill_top_flat_triangle_zbuffered_textured(
+            p1_eg,
+            p2_eg,
+            p3_eg,
+            z1_int,
+            z2_int,
+            z3_int,
+            uv1,
+            uv2,
+            uv3,
+            texture,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
+    } else {
+        // Split into two flat triangles
+        let t = (p2_eg.y - p1_eg.y) as f32 / (p3_eg.y - p1_eg.y) as f32;
+        let p4 = Point::new(
+            (p1_eg.x as f32 + t * (p3_eg.x - p1_eg.x) as f32) as i32,
+            p2_eg.y,
+        );
+        let z4_int = (z1_int as i64 + (t * (z3_int as i64 - z1_int as i64) as f32) as i64) as u32;
+        // Interpolate UV at split point
+        let uv4 = [
+            uv1[0] + t * (uv3[0] - uv1[0]),
+            uv1[1] + t * (uv3[1] - uv1[1]),
+        ];
+
+        fill_bottom_flat_triangle_zbuffered_textured(
+            p1_eg,
+            p2_eg,
+            p4,
+            z1_int,
+            z2_int,
+            z4_int,
+            uv1,
+            uv2,
+            uv4,
+            texture,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
+        fill_top_flat_triangle_zbuffered_textured(
+            p2_eg,
+            p4,
+            p3_eg,
+            z2_int,
+            z4_int,
+            z3_int,
+            uv2,
+            uv4,
+            uv3,
+            texture,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
+    }
+}
+
+// Textured bottom-flat triangle with z-buffering
+#[inline(always)]
+fn fill_bottom_flat_triangle_zbuffered_textured<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
+    p1: Point,
+    p2: Point,
+    p3: Point,
+    z1: u32,
+    z2: u32,
+    z3: u32,
+    uv1: [f32; 2],
+    uv2: [f32; 2],
+    uv3: [f32; 2],
+    texture: &crate::texture::Texture,
+    fb: &mut D,
+    zbuffer: &mut [u32],
+    width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
+) where
+    <D as DrawTarget>::Error: Debug,
+{
+    let height = p2.y - p1.y;
+    if height == 0 {
+        return;
+    }
+
+    let invslope1 = ((p2.x - p1.x) << 16) / height;
+    let invslope2 = ((p3.x - p1.x) << 16) / height;
+
+    let mut curx1 = p1.x << 16;
+    let mut curx2 = p1.x << 16;
+
+    for scanline_y in p1.y..=p2.y {
+        let dy = scanline_y - p1.y;
+        let t = dy as f32 / height as f32;
+
+        // Interpolate Z values
+        let z_left = if height > 0 {
+            (z1 as i64 + ((z2 as i64 - z1 as i64) * dy as i64 / height as i64)) as u32
+        } else {
+            z1
+        };
+        let z_right = if height > 0 {
+            (z1 as i64 + ((z3 as i64 - z1 as i64) * dy as i64 / height as i64)) as u32
+        } else {
+            z1
+        };
+
+        // Interpolate UVs
+        let uv_left = [
+            uv1[0] + t * (uv2[0] - uv1[0]),
+            uv1[1] + t * (uv2[1] - uv1[1]),
+        ];
+        let uv_right = [
+            uv1[0] + t * (uv3[0] - uv1[0]),
+            uv1[1] + t * (uv3[1] - uv1[1]),
+        ];
+
+        draw_scanline_zbuffered_textured(
+            curx1 >> 16,
+            curx2 >> 16,
+            scanline_y,
+            z_left,
+            z_right,
+            uv_left,
+            uv_right,
+            texture,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
+
+        curx1 += invslope1;
+        curx2 += invslope2;
+    }
+}
+
+// Textured top-flat triangle with z-buffering
+#[inline(always)]
+fn fill_top_flat_triangle_zbuffered_textured<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
+    p1: Point,
+    p2: Point,
+    p3: Point,
+    z1: u32,
+    z2: u32,
+    z3: u32,
+    uv1: [f32; 2],
+    uv2: [f32; 2],
+    uv3: [f32; 2],
+    texture: &crate::texture::Texture,
+    fb: &mut D,
+    zbuffer: &mut [u32],
+    width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
+) where
+    <D as DrawTarget>::Error: Debug,
+{
+    let height = p3.y - p1.y;
+    if height == 0 {
+        return;
+    }
+
+    let invslope1 = ((p3.x - p1.x) << 16) / height;
+    let invslope2 = ((p3.x - p2.x) << 16) / height;
+
+    let mut curx1 = p3.x << 16;
+    let mut curx2 = p3.x << 16;
+
+    for scanline_y in (p1.y..=p3.y).rev() {
+        let dy = scanline_y - p1.y;
+        let t = dy as f32 / height as f32;
+
+        // Interpolate Z values
+        let z_left = if height > 0 {
+            (z1 as i64 + ((z3 as i64 - z1 as i64) * dy as i64 / height as i64)) as u32
+        } else {
+            z1
+        };
+        let z_right = if height > 0 {
+            (z2 as i64 + ((z3 as i64 - z2 as i64) * dy as i64 / height as i64)) as u32
+        } else {
+            z2
+        };
+
+        // Interpolate UVs
+        let uv_left = [
+            uv1[0] + t * (uv3[0] - uv1[0]),
+            uv1[1] + t * (uv3[1] - uv1[1]),
+        ];
+        let uv_right = [
+            uv2[0] + t * (uv3[0] - uv2[0]),
+            uv2[1] + t * (uv3[1] - uv2[1]),
+        ];
+
+        draw_scanline_zbuffered_textured(
+            curx1 >> 16,
+            curx2 >> 16,
+            scanline_y,
+            z_left,
+            z_right,
+            uv_left,
+            uv_right,
+            texture,
+            fb,
+            zbuffer,
+            width,
+            fog_config,
+            dither_config,
+        );
+
+        curx1 -= invslope1;
+        curx2 -= invslope2;
+    }
+}
+
+// Draw scanline with texture mapping and z-buffering
+#[inline(always)]
+fn draw_scanline_zbuffered_textured<
+    D: DrawTarget<Color = embedded_graphics_core::pixelcolor::Rgb565>,
+>(
+    x1: i32,
+    x2: i32,
+    y: i32,
+    z1: u32,
+    z2: u32,
+    uv1: [f32; 2],
+    uv2: [f32; 2],
+    texture: &crate::texture::Texture,
+    fb: &mut D,
+    zbuffer: &mut [u32],
+    width: usize,
+    fog_config: Option<&FogConfig>,
+    dither_config: Option<&DitherConfig>,
+) where
+    <D as DrawTarget>::Error: Debug,
+{
+    let start = x1.min(x2);
+    let end = x1.max(x2);
+    let span_width = end - start;
+
+    for x in start..=end {
+        if x < 0 || y < 0 {
+            continue;
+        }
+
+        let zbuffer_idx = y as usize * width + x as usize;
+        if zbuffer_idx >= zbuffer.len() {
+            continue;
+        }
+
+        // Interpolate Z value
+        let t = if span_width > 0 {
+            (x - start) as f32 / span_width as f32
+        } else {
+            0.0
+        };
+        let z = if span_width > 0 {
+            (z1 as i64 + ((z2 as i64 - z1 as i64) * (x - start) as i64 / span_width as i64)) as u32
+        } else {
+            z1
+        };
+
+        // Z-test with epsilon to prevent Z-fighting on nearly coplanar faces
+        // We make the test slightly more permissive by allowing pixels within epsilon range
+        if z < zbuffer[zbuffer_idx].saturating_add(DEPTH_EPSILON) {
+            zbuffer[zbuffer_idx] = z;
+
+            // Interpolate UV
+            let u = uv1[0] + t * (uv2[0] - uv1[0]);
+            let v = uv1[1] + t * (uv2[1] - uv1[1]);
+
+            // Sample texture
+            let mut final_color = texture.sample(u, v);
+
+            // Apply effects in order: fog first, then dithering
+            if let Some(fog) = fog_config {
+                final_color = fog.apply(final_color, z);
+            }
+
+            if let Some(dither) = dither_config {
+                final_color = dither.apply(final_color, x, y);
+            }
+
+            fb.draw_iter([embedded_graphics_core::Pixel(Point::new(x, y), final_color)])
                 .unwrap();
         }
     }
@@ -971,9 +1797,9 @@ mod tests {
     fn test_draw_triangle_flat_bottom() {
         let mut fb = MockFramebuffer::new();
         let vertices = [
-            Point2::new(50, 10),  // Top vertex
-            Point2::new(30, 30),  // Bottom left
-            Point2::new(70, 30),  // Bottom right
+            Point2::new(50, 10), // Top vertex
+            Point2::new(30, 30), // Bottom left
+            Point2::new(70, 30), // Bottom right
         ];
         let color = Rgb565::CSS_YELLOW;
 
@@ -989,9 +1815,9 @@ mod tests {
     fn test_draw_triangle_flat_top() {
         let mut fb = MockFramebuffer::new();
         let vertices = [
-            Point2::new(30, 10),  // Top left
-            Point2::new(70, 10),  // Top right
-            Point2::new(50, 30),  // Bottom vertex
+            Point2::new(30, 10), // Top left
+            Point2::new(70, 10), // Top right
+            Point2::new(50, 30), // Bottom vertex
         ];
         let color = Rgb565::CSS_CYAN;
 
@@ -1023,9 +1849,9 @@ mod tests {
         let mut fb = MockFramebuffer::new();
         // Vertices in reverse y order
         let vertices = [
-            Point2::new(50, 30),  // Bottom (will be sorted to top)
-            Point2::new(30, 10),  // Top
-            Point2::new(70, 20),  // Middle
+            Point2::new(50, 30), // Bottom (will be sorted to top)
+            Point2::new(30, 10), // Top
+            Point2::new(70, 20), // Middle
         ];
         let color = Rgb565::CSS_WHITE;
 
@@ -1039,8 +1865,17 @@ mod tests {
     fn test_draw_multiple_primitives() {
         let mut fb = MockFramebuffer::new();
 
-        draw(DrawPrimitive::ColoredPoint(Point2::new(5, 5), Rgb565::CSS_RED), &mut fb);
-        draw(DrawPrimitive::Line([Point2::new(10, 10), Point2::new(20, 20)], Rgb565::CSS_GREEN), &mut fb);
+        draw(
+            DrawPrimitive::ColoredPoint(Point2::new(5, 5), Rgb565::CSS_RED),
+            &mut fb,
+        );
+        draw(
+            DrawPrimitive::Line(
+                [Point2::new(10, 10), Point2::new(20, 20)],
+                Rgb565::CSS_GREEN,
+            ),
+            &mut fb,
+        );
 
         // Should have pixels from both primitives
         assert!(fb.pixel_count() > 11); // 1 point + at least 10 from line

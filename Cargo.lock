@@ -166,7 +166,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "embedded-gfx"
+name = "embedded-3dgfx"
 version = "0.1.0"
 dependencies = [
  "embassy-time",
@@ -356,7 +356,7 @@ checksum = "f5e54036fe321fd421e10d732f155734c4e4afd610dd556d9a82833ab3ee0bed"
 name = "load_stl"
 version = "0.1.0"
 dependencies = [
- "embedded-gfx",
+ "embedded-3dgfx",
  "stl_io",
 ]
 

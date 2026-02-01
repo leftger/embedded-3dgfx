@@ -14,17 +14,17 @@
 //! - R: Rotate objects
 //! - ESC: Exit
 
-use embedded_gfx::draw::draw;
-use embedded_gfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_gfx::painters::DepthSortedTriangle;
-use embedded_gfx::perfcounter::PerformanceCounter;
-use embedded_gfx::K3dengine;
-use embedded_graphics::mono_font::{ascii::FONT_6X10, MonoTextStyle};
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::draw::draw;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::painters::DepthSortedTriangle;
+use embedded_3dgfx::perfcounter::PerformanceCounter;
+use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor, WebColors};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use nalgebra::Point3;
 use std::thread;
@@ -49,17 +49,29 @@ fn main() {
 
     // Create cube geometry
     let cube_vertices = [
-        [-1.0, -1.0, -1.0], [1.0, -1.0, -1.0], [1.0, 1.0, -1.0], [-1.0, 1.0, -1.0],
-        [-1.0, -1.0, 1.0], [1.0, -1.0, 1.0], [1.0, 1.0, 1.0], [-1.0, 1.0, 1.0],
+        [-1.0, -1.0, -1.0],
+        [1.0, -1.0, -1.0],
+        [1.0, 1.0, -1.0],
+        [-1.0, 1.0, -1.0],
+        [-1.0, -1.0, 1.0],
+        [1.0, -1.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [-1.0, 1.0, 1.0],
     ];
 
     let cube_faces = [
-        [0, 1, 2], [0, 2, 3], // Front
-        [1, 5, 6], [1, 6, 2], // Right
-        [5, 4, 7], [5, 7, 6], // Back
-        [4, 0, 3], [4, 3, 7], // Left
-        [3, 2, 6], [3, 6, 7], // Top
-        [4, 5, 1], [4, 1, 0], // Bottom
+        [0, 1, 2],
+        [0, 2, 3], // Front
+        [1, 5, 6],
+        [1, 6, 2], // Right
+        [5, 4, 7],
+        [5, 7, 6], // Back
+        [4, 0, 3],
+        [4, 3, 7], // Left
+        [3, 2, 6],
+        [3, 6, 7], // Top
+        [4, 5, 1],
+        [4, 1, 0], // Bottom
     ];
 
     let cube_geom = Geometry {
@@ -68,6 +80,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     // Create multiple cubes at different positions
@@ -158,19 +172,16 @@ fn main() {
 
         if use_painters {
             // Render using Painter's Algorithm (no Z-buffer!)
-            triangle_count = engine.render_painters_algorithm(
-                meshes.iter().copied(),
-                &mut triangles,
-                |prim| {
+            triangle_count =
+                engine.render_painters_algorithm(meshes.iter().copied(), &mut triangles, |prim| {
                     draw(prim, &mut display);
-                },
-            );
+                });
         } else {
             // Traditional Z-buffered rendering (for comparison)
             let mut zbuffer = vec![u32::MAX; 800 * 600];
 
             engine.render(meshes.iter().copied(), |prim| {
-                use embedded_gfx::draw::draw_zbuffered;
+                use embedded_3dgfx::draw::draw_zbuffered;
                 draw_zbuffered(prim, &mut display, &mut zbuffer, 800);
             });
 

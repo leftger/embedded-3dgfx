@@ -15,16 +15,16 @@
 //! - 1/2/3: Adjust LOD distance thresholds
 //! - ESC: Exit
 
-use embedded_gfx::draw::draw_zbuffered;
-use embedded_gfx::mesh::{Geometry, K3dMesh, LODLevels, RenderMode};
-use embedded_gfx::perfcounter::PerformanceCounter;
-use embedded_gfx::K3dengine;
-use embedded_graphics::mono_font::{ascii::FONT_6X10, MonoTextStyle};
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::draw::draw_zbuffered;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, LODLevels, RenderMode};
+use embedded_3dgfx::perfcounter::PerformanceCounter;
+use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor, WebColors};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use nalgebra::{Point3, Vector3};
 use std::f32::consts::PI;
@@ -115,6 +115,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let med_geom = Geometry {
@@ -123,6 +125,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let low_geom = Geometry {
@@ -131,6 +135,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     // Create multiple spheres at different distances
@@ -146,9 +152,9 @@ fn main() {
 
         // Assign color based on distance
         let color = match i {
-            0..=4 => Rgb565::CSS_RED, // Close - will use high detail
+            0..=4 => Rgb565::CSS_RED,   // Close - will use high detail
             5..=9 => Rgb565::CSS_GREEN, // Mid - will use medium detail
-            _ => Rgb565::CSS_BLUE,    // Far - will use low detail
+            _ => Rgb565::CSS_BLUE,      // Far - will use low detail
         };
         sphere.set_color(color);
         sphere.set_render_mode(RenderMode::Solid);
@@ -248,11 +254,13 @@ fn main() {
                         println!("High detail threshold: {:.0}", lod_high_threshold);
                     }
                     Keycode::Num2 => {
-                        lod_high_threshold = (lod_high_threshold + 5.0).min(lod_medium_threshold - 5.0);
+                        lod_high_threshold =
+                            (lod_high_threshold + 5.0).min(lod_medium_threshold - 5.0);
                         println!("High detail threshold: {:.0}", lod_high_threshold);
                     }
                     Keycode::Num3 => {
-                        lod_medium_threshold = (lod_medium_threshold - 5.0).max(lod_high_threshold + 5.0);
+                        lod_medium_threshold =
+                            (lod_medium_threshold - 5.0).max(lod_high_threshold + 5.0);
                         println!("Medium detail threshold: {:.0}", lod_medium_threshold);
                     }
                     Keycode::Num4 => {

@@ -1,20 +1,25 @@
 workspace = { members = ["load_stl"] }
 [package]
-name = "embedded-gfx"
+name = "embedded-3dgfx"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/leftger/embedded-gfx"
+repository = "https://github.com/leftger/embedded-3dgfx"
 readme = "./README.md"
-description = "3D graphics rendering for embedded systems"
+description = "3D graphics rendering for embedded systems (fork of embedded-gfx by Kezii)"
 keywords = [
     "embedded-graphics",
     "graphics",
     "embedded",
+    "3d",
 ]
 categories = [
     "embedded",
 ]
+
+# This is a fork of embedded-gfx (https://github.com/Kezii/embedded-gfx)
+# Original author: Kezii
+# Fork adds: texture mapping, fog/dithering effects, DMA rendering, Z-buffer improvements
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -31,7 +36,7 @@ heapless = "0.8"
 embassy-time = { git = "https://github.com/embassy-rs/embassy", package = "embassy-time", default-features = false, optional = true }
 
 [lib]
-name = "embedded_gfx"
+name = "embedded_3dgfx"
 path = "src/lib.rs"
 
 [dev-dependencies]

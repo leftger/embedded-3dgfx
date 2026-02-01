@@ -3,16 +3,16 @@
 //! Demonstrates rendering multiple meshes with different transformations.
 //! Use arrow keys to rotate the scene and +/- to zoom.
 
-use embedded_gfx::draw::draw;
-use embedded_gfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_gfx::perfcounter::PerformanceCounter;
-use embedded_gfx::K3dengine;
-use embedded_graphics::mono_font::{ascii::FONT_6X10, MonoTextStyle};
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::draw::draw;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::perfcounter::PerformanceCounter;
+use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use nalgebra::Point3;
 use std::thread;
@@ -20,8 +20,8 @@ use std::time::{Duration, Instant};
 
 fn make_pyramid() -> (Vec<[f32; 3]>, Vec<[usize; 3]>) {
     let vertices = vec![
-        [0.0, 1.0, 0.0],     // Top
-        [-1.0, -1.0, -1.0],  // Base
+        [0.0, 1.0, 0.0],    // Top
+        [-1.0, -1.0, -1.0], // Base
         [1.0, -1.0, -1.0],
         [1.0, -1.0, 1.0],
         [-1.0, -1.0, 1.0],
@@ -52,12 +52,18 @@ fn make_cube() -> (Vec<[f32; 3]>, Vec<[usize; 3]>) {
     ];
 
     let faces = vec![
-        [0, 1, 2], [0, 2, 3],
-        [5, 4, 7], [5, 7, 6],
-        [3, 2, 6], [3, 6, 7],
-        [4, 5, 1], [4, 1, 0],
-        [1, 5, 6], [1, 6, 2],
-        [4, 0, 3], [4, 3, 7],
+        [0, 1, 2],
+        [0, 2, 3],
+        [5, 4, 7],
+        [5, 7, 6],
+        [3, 2, 6],
+        [3, 6, 7],
+        [4, 5, 1],
+        [4, 1, 0],
+        [1, 5, 6],
+        [1, 6, 2],
+        [4, 0, 3],
+        [4, 3, 7],
     ];
 
     (vertices, faces)
@@ -82,11 +88,12 @@ fn make_grid() -> Vec<[f32; 3]> {
 fn main() {
     let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(800, 600));
 
-    let output_settings = OutputSettingsBuilder::new()
-        .scale(1)
-        .build();
+    let output_settings = OutputSettingsBuilder::new().scale(1).build();
 
-    let mut window = Window::new("3D Scene Viewer - Arrow keys to rotate, +/- to zoom", &output_settings);
+    let mut window = Window::new(
+        "3D Scene Viewer - Arrow keys to rotate, +/- to zoom",
+        &output_settings,
+    );
 
     // Create 3D engine
     let mut engine = K3dengine::new(800, 600);
@@ -99,6 +106,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
     let mut grid = K3dMesh::new(grid_geometry);
     grid.set_render_mode(RenderMode::Points);
@@ -111,6 +120,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
     let mut cube1 = K3dMesh::new(cube_geometry1);
     cube1.set_render_mode(RenderMode::Lines);
@@ -123,6 +134,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
     let mut cube2 = K3dMesh::new(cube_geometry2);
     cube2.set_render_mode(RenderMode::Solid);
@@ -137,6 +150,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
     let mut pyramid = K3dMesh::new(pyramid_geometry);
     pyramid.set_render_mode(RenderMode::Lines);
@@ -187,7 +202,9 @@ fn main() {
         // Update camera position
         let cam_x = camera_distance * camera_angle.cos();
         let cam_z = camera_distance * camera_angle.sin();
-        engine.camera.set_position(Point3::new(cam_x, camera_height, cam_z));
+        engine
+            .camera
+            .set_position(Point3::new(cam_x, camera_height, cam_z));
         engine.camera.set_target(Point3::new(0.0, 0.0, 0.0));
 
         // Animate objects

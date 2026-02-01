@@ -22,6 +22,10 @@ pub struct Geometry<'a> {
     pub colors: &'a [Rgb565],
     pub lines: &'a [[usize; 2]],
     pub normals: &'a [[f32; 3]],
+    /// UV texture coordinates (one per vertex)
+    pub uvs: &'a [[f32; 2]],
+    /// Optional texture ID for this geometry
+    pub texture_id: Option<u32>,
 }
 
 impl Geometry<'_> {
@@ -53,6 +57,11 @@ impl Geometry<'_> {
             return false;
         }
 
+        if !self.uvs.is_empty() && self.uvs.len() != self.vertices.len() {
+            error!("UVs are not the same length as vertices");
+            return false;
+        }
+
         true
     }
 
@@ -76,7 +85,10 @@ impl Geometry<'_> {
                 };
                 if !lines.iter().any(|&(x, y)| x == a && y == b) {
                     if lines.push((a, b)).is_err() {
-                        error!("lines_from_faces: heapless Vec capacity exceeded (max {}). Some edges will not be rendered.", N);
+                        error!(
+                            "lines_from_faces: heapless Vec capacity exceeded (max {}). Some edges will not be rendered.",
+                            N
+                        );
                         return lines;
                     }
                 }
@@ -179,9 +191,9 @@ impl<'a> K3dMesh<'a> {
             self.lod_medium.as_ref().unwrap_or(&self.geometry)
         } else {
             // Low detail
-            self.lod_low.as_ref().unwrap_or(
-                self.lod_medium.as_ref().unwrap_or(&self.geometry)
-            )
+            self.lod_low
+                .as_ref()
+                .unwrap_or(self.lod_medium.as_ref().unwrap_or(&self.geometry))
         }
     }
 
@@ -266,6 +278,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         assert!(geometry.check_validity());
@@ -283,6 +297,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         // This should panic because we call assert! in K3dMesh::new
@@ -301,6 +317,8 @@ mod tests {
             colors: &[],
             lines: &lines,
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         K3dMesh::new(geometry);
@@ -318,6 +336,8 @@ mod tests {
             colors: &colors,
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         K3dMesh::new(geometry);
@@ -366,6 +386,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mesh = K3dMesh::new(geometry);
@@ -383,6 +405,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut mesh = K3dMesh::new(geometry);
@@ -399,6 +423,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut mesh = K3dMesh::new(geometry);
@@ -415,6 +441,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut mesh = K3dMesh::new(geometry);
@@ -431,6 +459,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut mesh = K3dMesh::new(geometry);
@@ -449,6 +479,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut mesh = K3dMesh::new(geometry);
@@ -466,6 +498,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut mesh = K3dMesh::new(geometry);
@@ -485,6 +519,8 @@ mod tests {
             colors: &[],
             lines: &[],
             normals: &[],
+            uvs: &[],
+            texture_id: None,
         };
 
         let mut mesh = K3dMesh::new(geometry);

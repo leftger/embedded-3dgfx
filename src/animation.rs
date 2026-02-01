@@ -68,11 +68,7 @@ impl<'a> VertexAnimation<'a> {
 
         // Handle looping
         let t = if self.looping {
-            if duration > 0.0 {
-                time % duration
-            } else {
-                0.0
-            }
+            if duration > 0.0 { time % duration } else { 0.0 }
         } else {
             time.clamp(0.0, duration)
         };

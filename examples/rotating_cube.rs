@@ -2,16 +2,16 @@
 //!
 //! Demonstrates animated 3D transformations with a continuously rotating cube
 
-use embedded_gfx::draw::draw;
-use embedded_gfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_gfx::perfcounter::PerformanceCounter;
-use embedded_gfx::K3dengine;
-use embedded_graphics::mono_font::{ascii::FONT_6X10, MonoTextStyle};
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::draw::draw;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::perfcounter::PerformanceCounter;
+use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use nalgebra::Point3;
 use std::thread;
@@ -50,9 +50,7 @@ fn make_cube() -> (Vec<[f32; 3]>, Vec<[usize; 3]>) {
 fn main() {
     let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(640, 480));
 
-    let output_settings = OutputSettingsBuilder::new()
-        .scale(1)
-        .build();
+    let output_settings = OutputSettingsBuilder::new().scale(1).build();
 
     let mut window = Window::new("Rotating Cube - Press ESC to exit", &output_settings);
 
@@ -69,6 +67,8 @@ fn main() {
         colors: &[],
         lines: &[],
         normals: &[],
+        uvs: &[],
+        texture_id: None,
     };
 
     let mut cube = K3dMesh::new(geometry);

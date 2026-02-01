@@ -108,15 +108,13 @@ impl K3dengine {
 
                             // Determine color based on render mode
                             let color = match mesh.render_mode {
-                                RenderMode::SolidLightDir(light_dir) => {
-                                    self.calculate_lit_color(
-                                        face,
-                                        geometry.vertices,
-                                        geometry.normals,
-                                        mesh.color,
-                                        light_dir,
-                                    )
-                                }
+                                RenderMode::SolidLightDir(light_dir) => self.calculate_lit_color(
+                                    face,
+                                    geometry.vertices,
+                                    geometry.normals,
+                                    mesh.color,
+                                    light_dir,
+                                ),
                                 RenderMode::BlinnPhong { .. } => {
                                     // For Painter's Algorithm, fall back to simple lighting
                                     // Full Blinn-Phong requires per-pixel depth
@@ -125,10 +123,8 @@ impl K3dengine {
                                 _ => mesh.color,
                             };
 
-                            let primitive = DrawPrimitive::ColoredTriangle(
-                                [p1.xy(), p2.xy(), p3.xy()],
-                                color,
-                            );
+                            let primitive =
+                                DrawPrimitive::ColoredTriangle([p1.xy(), p2.xy(), p3.xy()], color);
 
                             triangles.push(DepthSortedTriangle::new(primitive, avg_depth));
                         }
@@ -167,7 +163,11 @@ impl K3dengine {
     ) -> Rgb565 {
         // Calculate face normal if not provided
         let normal = if !normals.is_empty() && face[0] < normals.len() {
-            nalgebra::Vector3::new(normals[face[0]][0], normals[face[0]][1], normals[face[0]][2])
+            nalgebra::Vector3::new(
+                normals[face[0]][0],
+                normals[face[0]][1],
+                normals[face[0]][2],
+            )
         } else {
             // Compute face normal from vertices
             let v0 = &vertices[face[0]];

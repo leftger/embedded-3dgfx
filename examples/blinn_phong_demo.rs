@@ -10,16 +10,16 @@
 //! - SPACE: Toggle auto-rotation
 //! - ESC: Exit
 
-use embedded_gfx::draw::draw_zbuffered;
-use embedded_gfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_gfx::perfcounter::PerformanceCounter;
-use embedded_gfx::K3dengine;
-use embedded_graphics::mono_font::{ascii::FONT_6X10, MonoTextStyle};
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::draw::draw_zbuffered;
+use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::perfcounter::PerformanceCounter;
+use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use load_stl::embed_stl;
 use nalgebra::{Point3, Vector3};
@@ -223,7 +223,10 @@ fn main() {
             let py = (indicator_y as f32 + rad.sin() * indicator_radius) as i32;
             if px >= 0 && px < 800 && py >= 0 && py < 600 {
                 display
-                    .draw_iter(std::iter::once(Pixel(Point::new(px, py), Rgb565::new(5, 5, 5))))
+                    .draw_iter(std::iter::once(Pixel(
+                        Point::new(px, py),
+                        Rgb565::new(5, 5, 5),
+                    )))
                     .ok();
             }
         }

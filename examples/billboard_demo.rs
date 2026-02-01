@@ -10,17 +10,17 @@
 //! - SPACE: Spawn more particles
 //! - ESC: Exit
 
-use embedded_gfx::billboard::Billboard;
-use embedded_gfx::draw::draw_zbuffered;
-use embedded_gfx::mesh::Geometry;
-use embedded_gfx::perfcounter::PerformanceCounter;
-use embedded_gfx::K3dengine;
-use embedded_graphics::mono_font::{ascii::FONT_6X10, MonoTextStyle};
+use embedded_3dgfx::K3dengine;
+use embedded_3dgfx::billboard::Billboard;
+use embedded_3dgfx::draw::draw_zbuffered;
+use embedded_3dgfx::mesh::Geometry;
+use embedded_3dgfx::perfcounter::PerformanceCounter;
+use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor, WebColors};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
-    sdl2::Keycode, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
 use nalgebra::{Point3, Vector3};
 use std::f32::consts::PI;
@@ -86,11 +86,7 @@ fn main() {
         let angle = (i as f32 / 20.0) * 2.0 * PI;
         let radius = 5.0;
         let position = Point3::new(angle.cos() * radius, 1.0, angle.sin() * radius);
-        let velocity = Vector3::new(
-            (angle + PI).cos() * 0.5,
-            2.0,
-            (angle + PI).sin() * 0.5,
-        );
+        let velocity = Vector3::new((angle + PI).cos() * 0.5, 2.0, (angle + PI).sin() * 0.5);
         let color = match i % 5 {
             0 => Rgb565::CSS_RED,
             1 => Rgb565::CSS_GREEN,
@@ -190,8 +186,13 @@ fn main() {
                                 1.5 + (i as f32 / 5.0),
                                 angle.sin() * speed,
                             );
-                            let colors =
-                                [Rgb565::CSS_RED, Rgb565::CSS_GREEN, Rgb565::CSS_BLUE, Rgb565::CSS_YELLOW, Rgb565::CSS_CYAN];
+                            let colors = [
+                                Rgb565::CSS_RED,
+                                Rgb565::CSS_GREEN,
+                                Rgb565::CSS_BLUE,
+                                Rgb565::CSS_YELLOW,
+                                Rgb565::CSS_CYAN,
+                            ];
                             let color = colors[i % colors.len()];
                             particles.push(Particle::new(position, velocity, color));
                         }
@@ -233,16 +234,16 @@ fn main() {
                 colors: &[],
                 lines: &[],
                 normals: &[],
+                uvs: &[],
+                texture_id: None,
             };
 
             // Transform and render each triangle
             for face in geometry.faces {
-                if let Some([p1, p2, p3]) = engine.transform_points(
-                    face,
-                    geometry.vertices,
-                    engine.camera.vp_matrix,
-                ) {
-                    use embedded_gfx::DrawPrimitive;
+                if let Some([p1, p2, p3]) =
+                    engine.transform_points(face, geometry.vertices, engine.camera.vp_matrix)
+                {
+                    use embedded_3dgfx::DrawPrimitive;
                     draw_zbuffered(
                         DrawPrimitive::ColoredTriangleWithDepth {
                             points: [p1.xy(), p2.xy(), p3.xy()],

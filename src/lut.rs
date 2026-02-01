@@ -32,7 +32,7 @@ const fn generate_sin_table() -> [i16; 256] {
             + x5 / 120.0         // x⁵/5!
             - x7 / 5040.0        // x⁷/7!
             + x9 / 362880.0      // x⁹/9!
-            - x11 / 39916800.0;  // x¹¹/11!
+            - x11 / 39916800.0; // x¹¹/11!
 
         table[i] = (sin_val * 32768.0) as i16;
         i += 1;
@@ -80,19 +80,37 @@ mod tests {
     fn test_sin_accuracy() {
         extern crate std;
         // Test accuracy at various angles
-        let test_angles = [0.0, PI / 6.0, PI / 4.0, PI / 3.0, PI / 2.0, PI, 3.0 * PI / 2.0];
+        let test_angles = [
+            0.0,
+            PI / 6.0,
+            PI / 4.0,
+            PI / 3.0,
+            PI / 2.0,
+            PI,
+            3.0 * PI / 2.0,
+        ];
 
         for angle in test_angles.iter() {
             let fast = fast_sin(*angle);
             let accurate = angle.sin();
             let error = (fast - accurate).abs();
 
-            std::println!("sin({:.3}): fast={:.4}, accurate={:.4}, error={:.4}",
-                         angle, fast, accurate, error);
+            std::println!(
+                "sin({:.3}): fast={:.4}, accurate={:.4}, error={:.4}",
+                angle,
+                fast,
+                accurate,
+                error
+            );
 
             // For a 256-entry lookup table, error < 0.02 (2%) is quite good
             // This is a reasonable trade-off for embedded systems
-            assert!(error < 0.02, "Error too large at angle {}: {}", angle, error);
+            assert!(
+                error < 0.02,
+                "Error too large at angle {}: {}",
+                angle,
+                error
+            );
         }
     }
 
@@ -106,11 +124,21 @@ mod tests {
             let accurate = angle.cos();
             let error = (fast - accurate).abs();
 
-            std::println!("cos({:.3}): fast={:.4}, accurate={:.4}, error={:.4}",
-                         angle, fast, accurate, error);
+            std::println!(
+                "cos({:.3}): fast={:.4}, accurate={:.4}, error={:.4}",
+                angle,
+                fast,
+                accurate,
+                error
+            );
 
             // For a 256-entry lookup table, error < 0.02 (2%) is acceptable
-            assert!(error < 0.02, "Error too large at angle {}: {}", angle, error);
+            assert!(
+                error < 0.02,
+                "Error too large at angle {}: {}",
+                angle,
+                error
+            );
         }
     }
 
@@ -125,12 +153,28 @@ mod tests {
         let sin2 = fast_sin(angle + 2.0 * PI);
         let sin3 = fast_sin(angle + 4.0 * PI);
 
-        std::println!("Periodicity test: sin1={:.4}, sin2={:.4}, sin3={:.4}", sin1, sin2, sin3);
-        std::println!("Differences: |sin1-sin2|={:.4}, |sin1-sin3|={:.4}",
-                     (sin1 - sin2).abs(), (sin1 - sin3).abs());
+        std::println!(
+            "Periodicity test: sin1={:.4}, sin2={:.4}, sin3={:.4}",
+            sin1,
+            sin2,
+            sin3
+        );
+        std::println!(
+            "Differences: |sin1-sin2|={:.4}, |sin1-sin3|={:.4}",
+            (sin1 - sin2).abs(),
+            (sin1 - sin3).abs()
+        );
 
         // Allow up to 0.02 difference due to table quantization
-        assert!((sin1 - sin2).abs() < 0.02, "Periodicity error too large: {}", (sin1 - sin2).abs());
-        assert!((sin1 - sin3).abs() < 0.02, "Periodicity error too large: {}", (sin1 - sin3).abs());
+        assert!(
+            (sin1 - sin2).abs() < 0.02,
+            "Periodicity error too large: {}",
+            (sin1 - sin2).abs()
+        );
+        assert!(
+            (sin1 - sin3).abs() < 0.02,
+            "Periodicity error too large: {}",
+            (sin1 - sin3).abs()
+        );
     }
 }

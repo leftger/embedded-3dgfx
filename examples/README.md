@@ -1,6 +1,6 @@
-# embedded-gfx Examples
+# embedded-3dgfx Examples
 
-This directory contains interactive visual examples demonstrating the capabilities of the embedded-gfx 3D graphics engine.
+This directory contains interactive visual examples demonstrating the capabilities of the embedded-3dgfx 3D graphics engine.
 
 ## Prerequisites
 
