@@ -159,9 +159,9 @@ fn main() {
         .normalize();
 
         // Rotate objects
-        suzanne.set_attitude(0.0, time * 0.5, 0.0);
-        teapot.set_attitude(0.0, time * 0.8, 0.0);
-        blahaj.set_attitude(0.0, time * 0.6, 0.0);
+        suzanne.set_attitude(-PI / 2.0, time * 0.5, 0.0);
+        teapot.set_attitude(-PI / 2.0, time * 0.8, 0.0);
+        blahaj.set_attitude(-PI / 2.0, time * 0.6, 0.0);
 
         // Set Blinn-Phong shading for all objects
         suzanne.set_render_mode(RenderMode::BlinnPhong {

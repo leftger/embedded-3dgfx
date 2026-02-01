@@ -45,6 +45,12 @@ impl Camera {
         self.update_projection();
     }
 
+    pub fn set_far(&mut self, far: f32) {
+        self.far = far;
+
+        self.update_projection();
+    }
+
     pub fn set_target(&mut self, target: Point3<f32>) {
         self.target = target;
         self.update_view();

@@ -77,6 +77,7 @@ fn main() {
     let mut engine = K3dengine::new(800, 600);
     engine.camera.set_position(Point3::new(0.0, 5.0, -20.0));
     engine.camera.set_target(Point3::new(0.0, 0.0, 0.0));
+    engine.camera.set_far(200.0); // Need far clipping for distant spheres
 
     let mut perf = PerformanceCounter::new();
     perf.only_fps(true);
