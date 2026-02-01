@@ -14,6 +14,7 @@ use nalgebra::Vector3;
 #[allow(unused_imports)]
 use nalgebra::ComplexField;
 
+pub mod animation;
 pub mod billboard;
 pub mod camera;
 pub mod draw;
