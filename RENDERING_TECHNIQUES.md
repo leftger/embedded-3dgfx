@@ -17,32 +17,12 @@ This document outlines various 3D rendering techniques suitable for embedded dev
 - **Billboard system** - Camera-facing quads for particles and sprites
 - **LOD system** - Distance-based mesh detail switching
 - **Gouraud shading** - Smooth vertex color interpolation across triangles
+- **Vertex Animation** - Keyframe interpolation for animated models
+- **Painter's Algorithm** - Back-to-front sorting without Z-buffer (saves 1.92MB RAM)
 
 ## High-Impact Techniques to Consider
 
-### 1. Gouraud Shading (Vertex Color Interpolation)
-
-**Description**: Interpolate vertex colors across triangle faces for smooth shading.
-
-**Implementation**:
-```rust
-// Store per-vertex colors
-let vertex_colors = [...];
-
-// During scanline rasterization, interpolate RGB values
-let color = interpolate_color(v1_color, v2_color, v3_color, barycentric);
-```
-
-**Performance**:
-- Cost: Low (just linear interpolation in scanline loop)
-- Benefit: Smooth color gradients, much better visual quality
-- Memory: Per-vertex color storage
-
-**Recommended**: ⭐⭐⭐⭐⭐ Easy to add, huge visual impact
-
----
-
-### 2. Affine Texture Mapping
+### 1. Affine Texture Mapping
 
 **Description**: Fast texture mapping without perspective correction (classic PS1/N64 look).
 
@@ -112,100 +92,7 @@ fn render_bsp(node: &BSPNode, camera_pos: Point3<f32>) {
 
 ---
 
-### 4. Painter's Algorithm (Back-to-Front)
-
-**Description**: Sort triangles by depth and draw furthest first.
-
-**Implementation**:
-```rust
-// Sort faces by average Z depth
-faces.sort_by(|a, b| {
-    let z_a = (a.v1.z + a.v2.z + a.v3.z) / 3.0;
-    let z_b = (b.v1.z + b.v2.z + b.v3.z) / 3.0;
-    z_b.partial_cmp(&z_a).unwrap()
-});
-
-// Draw back-to-front (no Z-buffer needed!)
-for face in faces {
-    draw_triangle(face);
-}
-```
-
-**Performance**:
-- Cost: Sorting overhead per frame (O(n log n))
-- Benefit: Eliminates Z-buffer memory (saves 1.92MB at 800x600!)
-- Drawback: Doesn't handle overlapping triangles perfectly
-
-**Recommended**: ⭐⭐⭐ Good for low-RAM systems
-
----
-
-### 5. Billboarding (Sprite-based 3D)
-
-**Description**: 2D sprites that always face the camera.
-
-**Use Cases**:
-- Particles (explosions, smoke, sparks)
-- Distant objects (trees, rocks)
-- Vegetation
-- UI elements in 3D space
-
-**Implementation**:
-```rust
-// Calculate billboard orientation
-let to_camera = (camera_pos - billboard_pos).normalize();
-let right = camera_up.cross(&to_camera);
-let up = to_camera.cross(&right);
-
-// Create quad facing camera
-let quad = [
-    billboard_pos - right * size + up * size,
-    billboard_pos + right * size + up * size,
-    billboard_pos + right * size - up * size,
-    billboard_pos - right * size - up * size,
-];
-```
-
-**Performance**:
-- Cost: Very low (just 2 triangles per billboard)
-- Benefit: Huge performance win vs 3D models
-- Memory: Small textures (16x16 to 64x64)
-
-**Recommended**: ⭐⭐⭐⭐⭐ Essential for particles and effects
-
----
-
-### 6. Level of Detail (LOD)
-
-**Description**: Multiple mesh resolutions per object, switch based on distance.
-
-**Implementation**:
-```rust
-struct LODMesh {
-    high: Geometry,    // 2000 triangles
-    medium: Geometry,  // 500 triangles
-    low: Geometry,     // 100 triangles
-}
-
-fn select_lod(distance: f32) -> &Geometry {
-    match distance {
-        d if d > 100.0 => &self.low,
-        d if d > 50.0  => &self.medium,
-        _              => &self.high,
-    }
-}
-```
-
-**Performance**:
-- Cost: Extra mesh storage (3x memory per model)
-- Benefit: 3-10x performance improvement
-- Best for: Large scenes with many objects
-
-**Recommended**: ⭐⭐⭐⭐⭐ Major performance boost
-
----
-
-### 7. Lightmapping (Baked Lighting)
+### 4. Lightmapping (Baked Lighting)
 
 **Description**: Pre-computed lighting stored in textures.
 
@@ -264,31 +151,7 @@ fn render_room(room: &Room, portal_bounds: Rect) {
 
 ---
 
-### 9. Vertex Animation (Morph Targets)
-
-**Description**: Store keyframe vertices, interpolate between them.
-
-**Implementation**:
-```rust
-struct MorphTarget {
-    keyframes: Vec<Vec<[f32; 3]>>,  // Multiple vertex positions
-    times: Vec<f32>,
-}
-
-// Interpolate between keyframes
-let vertices = lerp(keyframe1, keyframe2, t);
-```
-
-**Performance**:
-- Cost: Memory for keyframes (N frames × vertex count)
-- Benefit: Cheaper than skeletal animation (no bone math)
-- Best for: Facial animation, simple character animation
-
-**Recommended**: ⭐⭐⭐ Good for simple animations
-
----
-
-### 10. Mode 7-Style Effects (Affine Transformations)
+### 7. Mode 7-Style Effects (Affine Transformations)
 
 **Description**: Ground plane rendering with affine transforms (Super Mario Kart, F-Zero style).
 
@@ -318,7 +181,7 @@ for y in 0..screen_height {
 
 ## Embedded-Specific Optimizations
 
-### 11. Fixed-Point Everything
+### 8. Fixed-Point Everything
 
 **Description**: Convert all vertex math to fixed-point arithmetic.
 
@@ -348,7 +211,7 @@ fn fixed_mul(a: Fixed, b: Fixed) -> Fixed {
 
 ---
 
-### 12. DMA-Based Rendering (Double Buffering)
+### 9. DMA-Based Rendering (Double Buffering)
 
 **Description**: Use DMA to transfer framebuffer while CPU renders next frame.
 
@@ -373,7 +236,7 @@ swap(&mut framebuffer_a, &mut framebuffer_b);
 
 ---
 
-### 13. Tile-Based Deferred Rendering
+### 10. Tile-Based Deferred Rendering
 
 **Description**: Divide screen into tiles, render each independently.
 
@@ -402,7 +265,7 @@ for tile_y in 0..(height / TILE_SIZE) {
 
 ---
 
-### 14. Scanline-Based Effects
+### 11. Scanline-Based Effects
 
 **Description**: Process effects during scanline rendering instead of post-processing.
 
@@ -428,7 +291,7 @@ let final_color = src_color * alpha + dst_color * (1.0 - alpha);
 
 ---
 
-### 15. Ray Casting (Not Ray Tracing!)
+### 12. Ray Casting (Not Ray Tracing!)
 
 **Description**: Cast one ray per screen column (Wolfenstein 3D style).
 
@@ -462,44 +325,29 @@ for x in 0..screen_width {
 Given your hardware (ARM Cortex-M33 with FPU), prioritize these:
 
 ### Immediate Impact (Easy to Add)
-1. **Gouraud shading** ⭐⭐⭐⭐⭐
-   - Easy to implement
-   - Huge visual improvement
-   - Low performance cost
-
-2. **Billboarding** ⭐⭐⭐⭐⭐
-   - Essential for particles and effects
-   - Very low cost
-   - Large visual impact
-
-3. **Scanline-based effects** ⭐⭐⭐⭐
+1. **Scanline-based effects** ⭐⭐⭐⭐
    - Fog, dithering
    - Minimal cost
    - Professional look
 
 ### Medium-Term (Moderate Effort)
-4. **Affine texture mapping** ⭐⭐⭐⭐
+2. **Affine texture mapping** ⭐⭐⭐⭐
    - Classic 3D look
    - Manageable performance cost
    - Large visual improvement
 
-5. **LOD system** ⭐⭐⭐⭐⭐
-   - Major performance boost
-   - Essential for complex scenes
-   - Straightforward implementation
-
-6. **DMA rendering** ⭐⭐⭐⭐⭐
+3. **DMA rendering** ⭐⭐⭐⭐⭐
    - Free 30% performance gain
    - Essential for production
    - Requires hardware setup
 
 ### Advanced (For Optimization)
-7. **Lightmapping** ⭐⭐⭐⭐
+4. **Lightmapping** ⭐⭐⭐⭐
    - Beautiful static lighting
    - Requires offline baking tool
    - Worth it for quality
 
-8. **Portal rendering** ⭐⭐⭐⭐
+5. **Portal rendering** ⭐⭐⭐⭐
    - If building indoor environments
    - Large performance win
    - Requires scene design
@@ -509,14 +357,12 @@ Given your hardware (ARM Cortex-M33 with FPU), prioritize these:
 ## Implementation Priority
 
 **Phase 1: Visual Quality**
-- Gouraud shading
-- Billboarding
 - Fog effects
+- Scanline-based effects (dithering, etc.)
 
 **Phase 2: Performance**
-- LOD system
 - DMA rendering
-- Better frustum culling
+- Tile-based rendering optimizations
 
 **Phase 3: Advanced Graphics**
 - Affine texture mapping
@@ -559,10 +405,10 @@ With optimizations:
 ## Contributing
 
 Feel free to implement any of these techniques and submit PRs! Priority areas:
-1. Gouraud shading
-2. Affine texture mapping
-3. LOD system
-4. DMA rendering support
+1. Affine texture mapping
+2. Lightmapping
+3. DMA rendering support
+4. Scanline-based effects (fog, dithering)
 
 ---
 
