@@ -20,10 +20,10 @@ use embedded_3dgfx::display_backend::SimulatorBackend;
 use embedded_3dgfx::draw::draw_zbuffered;
 use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_3dgfx::perfcounter::PerformanceCounter;
-use embedded_3dgfx::swapchain::SwapChain;
+use embedded_3dgfx::swapchain::StandardSwapChain;
 use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
-use embedded_graphics_core::pixelcolor::{Rgb565, WebColors};
+use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor, WebColors};
 use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
     OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
@@ -37,13 +37,14 @@ fn main() {
     let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(800, 600));
 
     // For double-buffer mode, we'll use a swap chain with two framebuffers
-    let mut fb0_data = vec![0u16; 800 * 600];
-    let mut fb1_data = vec![0u16; 800 * 600];
+    // Leak vec to get 'static lifetime (acceptable for demo)
+    let fb0_data: &'static mut [Rgb565] = vec![Rgb565::BLACK; 800 * 600].leak();
+    let fb1_data: &'static mut [Rgb565] = vec![Rgb565::BLACK; 800 * 600].leak();
 
-    let mut swap_chain = SwapChain::<800, 600, _>::new(
-        fb0_data.as_mut_ptr() as *mut core::ffi::c_void,
-        fb1_data.as_mut_ptr() as *mut core::ffi::c_void,
-        false,
+    let mut swap_chain = StandardSwapChain::<800, 600, _>::from_static_slices(
+        fb0_data,
+        fb1_data,
+        false, // little endian
         SimulatorBackend::new(),
     );
 
@@ -212,14 +213,23 @@ fn main() {
 
         if use_double_buffer {
             // Double-buffered path: render to back buffer
-            let back_buffer = swap_chain.get_back_buffer();
-            back_buffer.clear(Rgb565::BLACK).unwrap();
-            zbuffer.fill(u32::MAX);
+            {
+                let back_buffer = swap_chain.get_back_buffer();
+                back_buffer.clear(Rgb565::BLACK).unwrap();
+                zbuffer.fill(u32::MAX);
 
-            // Render all cubes
-            engine.render(cubes.iter(), |prim| {
-                draw_zbuffered(prim, back_buffer, &mut zbuffer, 800);
-            });
+                // Render all cubes
+                engine.render(cubes.iter(), |prim| {
+                    draw_zbuffered(prim, back_buffer, &mut zbuffer, 800);
+                });
+
+                // Copy back buffer to display for visualization BEFORE presenting
+                // (In real hardware, this wouldn't be needed - DMA does it)
+                // FrameBuf implements IntoIterator, so we can iterate over pixels
+                for pixel in back_buffer.into_iter() {
+                    display.draw_iter([pixel]).unwrap();
+                }
+            }
 
             let render_time = render_start.elapsed().as_secs_f32() * 1000.0;
             render_times.push(render_time);
@@ -229,28 +239,6 @@ fn main() {
 
             // Present: swap buffers and "transfer" via DMA (simulated)
             swap_chain.present().unwrap();
-
-            // Copy front buffer to display for visualization
-            // (In real hardware, this wouldn't be needed - DMA does it)
-            // For the simulator, we copy the framebuffer data to the display
-            let front_slice = swap_chain.get_front_buffer().as_slice();
-            for y in 0..600 {
-                for x in 0..800 {
-                    let idx = y * 800 + x;
-                    // Convert u16 storage to Rgb565
-                    let raw = front_slice[idx];
-                    let r = ((raw >> 11) & 0x1F) as u8;
-                    let g = ((raw >> 5) & 0x3F) as u8;
-                    let b = (raw & 0x1F) as u8;
-                    let color = Rgb565::new(r, g, b);
-                    display
-                        .draw_iter([embedded_graphics_core::Pixel(
-                            Point::new(x as i32, y as i32),
-                            color,
-                        )])
-                        .unwrap();
-                }
-            }
         } else {
             // Single-buffered path: render directly to display
             display.clear(Rgb565::BLACK).unwrap();

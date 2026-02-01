@@ -133,12 +133,22 @@ dependencies = [
  "embassy-time",
  "embedded-graphics",
  "embedded-graphics-core",
+ "embedded-graphics-framebuf",
  "embedded-graphics-simulator",
  "heapless",
  "line_drawing",
  "load_stl",
  "log",
  "nalgebra",
+]
+
+[[package]]
+name = "embedded-dma"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "994f7e5b5cb23521c22304927195f236813053eb9c065dd2226a32ba64695446"
+dependencies = [
+ "stable_deref_trait",
 ]
 
 [[package]]
@@ -162,6 +172,16 @@ checksum = "ba9ecd261f991856250d2207f6d8376946cd9f412a2165d3b75bc87a0bc7a044"
 dependencies = [
  "az",
  "byteorder",
+]
+
+[[package]]
+name = "embedded-graphics-framebuf"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffe8bc885182acbe18c1831e3561b737e3d7fa55040a50dc8f80121d73801625"
+dependencies = [
+ "embedded-dma",
+ "embedded-graphics",
 ]
 
 [[package]]

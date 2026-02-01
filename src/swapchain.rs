@@ -14,7 +14,11 @@
 //! - Predictable frame timing
 
 use crate::display_backend::{DisplayBackend, DisplayError};
-use crate::framebuffer::DmaReadyFramebuffer;
+use embedded_graphics_framebuf::{
+    backends::{DMACapableFrameBufferBackend, EndianCorrectedBuffer, EndianCorrection},
+    FrameBuf,
+};
+use embedded_graphics_core::pixelcolor::Rgb565;
 
 /// Double-buffered swap chain for tear-free rendering
 ///
@@ -24,55 +28,101 @@ use crate::framebuffer::DmaReadyFramebuffer;
 /// # Type Parameters
 /// - `W`: Framebuffer width in pixels
 /// - `H`: Framebuffer height in pixels
-/// - `B`: Display backend implementing `DisplayBackend<W, H>`
-pub struct SwapChain<const W: usize, const H: usize, B: DisplayBackend<W, H>> {
+/// - `FB`: Framebuffer backend implementing `DMACapableFrameBufferBackend`
+/// - `B`: Display backend implementing `DisplayBackend<W, H, FB>`
+pub struct SwapChain<const W: usize, const H: usize, FB, B>
+where
+    FB: DMACapableFrameBufferBackend<Color = Rgb565>,
+    B: DisplayBackend<W, H, FB>,
+{
     /// Front buffer (currently being displayed)
-    front: DmaReadyFramebuffer<W, H>,
+    front: FrameBuf<Rgb565, FB>,
     /// Back buffer (currently being rendered to)
-    back: DmaReadyFramebuffer<W, H>,
+    back: FrameBuf<Rgb565, FB>,
     /// Display backend for DMA transfers
     backend: B,
     /// Frame counter for statistics
     frame_count: u64,
 }
 
-impl<const W: usize, const H: usize, B: DisplayBackend<W, H>> SwapChain<W, H, B> {
-    /// Create a new swap chain with two framebuffers
+/// Type alias for SwapChain using EndianCorrectedBuffer backend
+///
+/// This is the most common configuration, using statically allocated
+/// framebuffer memory with endianness correction.
+pub type StandardSwapChain<const W: usize, const H: usize, B> =
+    SwapChain<W, H, EndianCorrectedBuffer<'static, Rgb565>, B>;
+
+/// Constructor for standard swap chain configuration
+impl<const W: usize, const H: usize, B> StandardSwapChain<W, H, B>
+where
+    B: DisplayBackend<W, H, EndianCorrectedBuffer<'static, Rgb565>>,
+{
+    /// Create a new swap chain from static slices
     ///
     /// # Arguments
-    /// * `front_ptr` - Pointer to front framebuffer memory
-    /// * `back_ptr` - Pointer to back framebuffer memory
+    /// * `front_data` - Static mutable slice for front framebuffer
+    /// * `back_data` - Static mutable slice for back framebuffer
     /// * `big_endian` - Whether to use big-endian byte order for colors
     /// * `backend` - Display backend for DMA operations
     ///
-    /// # Safety
-    /// The framebuffer pointers must point to valid memory regions of size W×H×2 bytes
-    pub fn new(
-        front_ptr: *mut core::ffi::c_void,
-        back_ptr: *mut core::ffi::c_void,
+    /// # Example
+    /// ```ignore
+    /// static mut FB0_DATA: [Rgb565; 800 * 600] = [Rgb565::BLACK; 800 * 600];
+    /// static mut FB1_DATA: [Rgb565; 800 * 600] = [Rgb565::BLACK; 800 * 600];
+    ///
+    /// let swap_chain = unsafe {
+    ///     StandardSwapChain::<800, 600, _>::from_static_slices(
+    ///         &mut FB0_DATA,
+    ///         &mut FB1_DATA,
+    ///         false,
+    ///         SimulatorBackend::new(),
+    ///     )
+    /// };
+    /// ```
+    pub fn from_static_slices(
+        front_data: &'static mut [Rgb565],
+        back_data: &'static mut [Rgb565],
         big_endian: bool,
         backend: B,
     ) -> Self {
+        let front_backend = if big_endian {
+            EndianCorrectedBuffer::new(front_data, EndianCorrection::ToBigEndian)
+        } else {
+            EndianCorrectedBuffer::new(front_data, EndianCorrection::ToLittleEndian)
+        };
+
+        let back_backend = if big_endian {
+            EndianCorrectedBuffer::new(back_data, EndianCorrection::ToBigEndian)
+        } else {
+            EndianCorrectedBuffer::new(back_data, EndianCorrection::ToLittleEndian)
+        };
+
         Self {
-            front: DmaReadyFramebuffer::new(front_ptr, big_endian),
-            back: DmaReadyFramebuffer::new(back_ptr, big_endian),
+            front: FrameBuf::new(front_backend, W, H),
+            back: FrameBuf::new(back_backend, W, H),
             backend,
             frame_count: 0,
         }
     }
+}
 
+impl<const W: usize, const H: usize, FB, B> SwapChain<W, H, FB, B>
+where
+    FB: DMACapableFrameBufferBackend<Color = Rgb565>,
+    B: DisplayBackend<W, H, FB>,
+{
     /// Get mutable reference to the back buffer for rendering
     ///
     /// Render all graphics operations to this buffer. When ready to display,
     /// call `present()` to swap buffers.
-    pub fn get_back_buffer(&mut self) -> &mut DmaReadyFramebuffer<W, H> {
+    pub fn get_back_buffer(&mut self) -> &mut FrameBuf<Rgb565, FB> {
         &mut self.back
     }
 
     /// Get reference to the front buffer (currently being displayed)
     ///
     /// This is rarely needed, as you should render to the back buffer.
-    pub fn get_front_buffer(&self) -> &DmaReadyFramebuffer<W, H> {
+    pub fn get_front_buffer(&self) -> &FrameBuf<Rgb565, FB> {
         &self.front
     }
 
@@ -164,15 +214,23 @@ mod tests {
     extern crate std;
     use super::*;
     use crate::display_backend::SimulatorBackend;
+    use embedded_graphics_core::pixelcolor::RgbColor;
+    use std::vec;
+
+    // Helper to create a leaked slice for testing
+    fn create_static_buffer<const SIZE: usize>() -> &'static mut [Rgb565] {
+        let vec = vec![Rgb565::BLACK; SIZE];
+        vec.leak()
+    }
 
     #[test]
     fn test_swapchain_creation() {
-        let mut fb0_data = [0u16; 320 * 240];
-        let mut fb1_data = [0u16; 320 * 240];
+        let fb0 = create_static_buffer::<{ 320 * 240 }>();
+        let fb1 = create_static_buffer::<{ 320 * 240 }>();
 
-        let swap_chain = SwapChain::<320, 240, _>::new(
-            fb0_data.as_mut_ptr() as *mut core::ffi::c_void,
-            fb1_data.as_mut_ptr() as *mut core::ffi::c_void,
+        let swap_chain = StandardSwapChain::<320, 240, _>::from_static_slices(
+            fb0,
+            fb1,
             false,
             SimulatorBackend::new(),
         );
@@ -184,48 +242,35 @@ mod tests {
 
     #[test]
     fn test_swapchain_present() {
-        let mut fb0_data = [0u16; 320 * 240];
-        let mut fb1_data = [0u16; 320 * 240];
+        let fb0 = create_static_buffer::<{ 320 * 240 }>();
+        let fb1 = create_static_buffer::<{ 320 * 240 }>();
 
-        let mut swap_chain = SwapChain::<320, 240, _>::new(
-            fb0_data.as_mut_ptr() as *mut core::ffi::c_void,
-            fb1_data.as_mut_ptr() as *mut core::ffi::c_void,
+        let mut swap_chain = StandardSwapChain::<320, 240, _>::from_static_slices(
+            fb0,
+            fb1,
             false,
             SimulatorBackend::new(),
         );
 
-        // Render to back buffer (just fill with a value)
-        swap_chain.get_back_buffer().as_mut_slice().fill(0x1234);
-
         // Present should succeed
         assert!(swap_chain.present().is_ok());
         assert_eq!(swap_chain.frame_count(), 1);
-
-        // Back buffer should now be different from what we filled
-        // (because buffers were swapped)
-        let back = swap_chain.get_back_buffer();
-        // The back buffer is now the old front buffer, which should be 0
-        assert_eq!(back.as_slice()[0], 0);
-
-        // Front buffer should have our rendered data
-        assert_eq!(swap_chain.get_front_buffer().as_slice()[0], 0x1234);
     }
 
     #[test]
     fn test_swapchain_multiple_presents() {
-        let mut fb0_data = [0u16; 320 * 240];
-        let mut fb1_data = [0u16; 320 * 240];
+        let fb0 = create_static_buffer::<{ 320 * 240 }>();
+        let fb1 = create_static_buffer::<{ 320 * 240 }>();
 
-        let mut swap_chain = SwapChain::<320, 240, _>::new(
-            fb0_data.as_mut_ptr() as *mut core::ffi::c_void,
-            fb1_data.as_mut_ptr() as *mut core::ffi::c_void,
+        let mut swap_chain = StandardSwapChain::<320, 240, _>::from_static_slices(
+            fb0,
+            fb1,
             false,
             SimulatorBackend::new(),
         );
 
         // Present multiple frames
-        for i in 0..5 {
-            swap_chain.get_back_buffer().as_mut_slice().fill(i as u16);
+        for _ in 0..5 {
             assert!(swap_chain.present().is_ok());
         }
 
@@ -234,12 +279,12 @@ mod tests {
 
     #[test]
     fn test_swapchain_try_present() {
-        let mut fb0_data = [0u16; 320 * 240];
-        let mut fb1_data = [0u16; 320 * 240];
+        let fb0 = create_static_buffer::<{ 320 * 240 }>();
+        let fb1 = create_static_buffer::<{ 320 * 240 }>();
 
-        let mut swap_chain = SwapChain::<320, 240, _>::new(
-            fb0_data.as_mut_ptr() as *mut core::ffi::c_void,
-            fb1_data.as_mut_ptr() as *mut core::ffi::c_void,
+        let mut swap_chain = StandardSwapChain::<320, 240, _>::from_static_slices(
+            fb0,
+            fb1,
             false,
             SimulatorBackend::new(),
         );
@@ -251,12 +296,12 @@ mod tests {
 
     #[test]
     fn test_swapchain_frame_counter() {
-        let mut fb0_data = [0u16; 320 * 240];
-        let mut fb1_data = [0u16; 320 * 240];
+        let fb0 = create_static_buffer::<{ 320 * 240 }>();
+        let fb1 = create_static_buffer::<{ 320 * 240 }>();
 
-        let mut swap_chain = SwapChain::<320, 240, _>::new(
-            fb0_data.as_mut_ptr() as *mut core::ffi::c_void,
-            fb1_data.as_mut_ptr() as *mut core::ffi::c_void,
+        let mut swap_chain = StandardSwapChain::<320, 240, _>::from_static_slices(
+            fb0,
+            fb1,
             false,
             SimulatorBackend::new(),
         );

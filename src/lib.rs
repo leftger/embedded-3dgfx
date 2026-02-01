@@ -19,13 +19,18 @@ pub mod billboard;
 pub mod camera;
 pub mod display_backend;
 pub mod draw;
-pub mod framebuffer;
 pub mod lut;
 pub mod mesh;
 pub mod painters;
 pub mod perfcounter;
 pub mod swapchain;
 pub mod texture;
+
+// Re-export framebuffer types from external crate for user convenience
+pub use embedded_graphics_framebuf::{
+    backends::{DMACapableFrameBufferBackend, EndianCorrectedBuffer, EndianCorrection},
+    FrameBuf,
+};
 
 #[derive(Debug, Clone)]
 pub enum DrawPrimitive {
