@@ -13,6 +13,10 @@ This document outlines various 3D rendering techniques suitable for embedded dev
 - **Inline optimization** - Hot functions marked for aggressive inlining
 - **Fixed-point rasterization** - Integer-only triangle filling
 - **Pre-computed lighting constants** - Per-mesh instead of per-face
+- **Blinn-Phong shading** - Specular highlights with half-vector approximation
+- **Billboard system** - Camera-facing quads for particles and sprites
+- **LOD system** - Distance-based mesh detail switching
+- **Gouraud shading** - Smooth vertex color interpolation across triangles
 
 ## High-Impact Techniques to Consider
 
