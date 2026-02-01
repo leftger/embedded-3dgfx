@@ -21,9 +21,10 @@ pub mod draw;
 pub mod framebuffer;
 pub mod lut;
 pub mod mesh;
+pub mod painters;
 pub mod perfcounter;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DrawPrimitive {
     ColoredPoint(Point2<i32>, Rgb565),
     Line([Point2<i32>; 2], Rgb565),
