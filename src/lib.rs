@@ -23,6 +23,7 @@ pub mod lut;
 pub mod mesh;
 #[cfg(feature = "std")]
 pub mod painters;
+#[cfg(feature = "perfcounter")]
 pub mod perfcounter;
 pub mod swapchain;
 pub mod texture;

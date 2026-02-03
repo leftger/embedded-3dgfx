@@ -10,8 +10,8 @@ fn now_us() -> u64 {
     Instant::now().as_micros() as u64
 }
 
-// Use std::time for desktop/simulator targets or when embassy-time is not enabled
-#[cfg(not(feature = "embassy-time"))]
+// Use std::time for desktop/simulator targets when std feature is enabled
+#[cfg(all(feature = "std", not(feature = "embassy-time")))]
 fn now_us() -> u64 {
     extern crate std;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -21,6 +21,34 @@ fn now_us() -> u64 {
         .as_micros() as u64
 }
 
+// Dummy implementation when neither std nor embassy-time is available
+// Users must enable one of these features to use PerformanceCounter
+#[cfg(not(any(feature = "std", feature = "embassy-time")))]
+fn now_us() -> u64 {
+    // Return 0 as a fallback - PerformanceCounter won't work but won't break the build
+    // This allows the library to compile in no_std without timing functionality
+    0
+}
+
+/// Performance counter for measuring rendering performance
+///
+/// **Timing Requirements:**
+/// This module requires the `perfcounter` feature and a timing source:
+/// - For embedded with Embassy: enable both `perfcounter` and `embassy-time` features
+/// - For desktop/simulator: enable `std` feature (includes perfcounter automatically)
+/// - Without a timing source, timing will always return 0
+///
+/// # Example
+/// ```toml
+/// # For embedded with Embassy:
+/// embedded-3dgfx = { version = "0.1", features = ["perfcounter", "embassy-time"] }
+///
+/// # For desktop/simulator:
+/// embedded-3dgfx = { version = "0.1", features = ["std"] }
+///
+/// # Pure no_std without perfcounter:
+/// embedded-3dgfx = { version = "0.1", default-features = false }
+/// ```
 #[derive(Debug)]
 pub struct PerformanceCounter {
     frame_count: u64,
@@ -128,6 +156,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "std", feature = "embassy-time"))]
     fn test_perfcounter_get_frametime() {
         let mut perf = PerformanceCounter::new();
         perf.start_of_frame();
@@ -140,6 +169,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "std", feature = "embassy-time"))]
     fn test_perfcounter_add_measurement() {
         let mut perf = PerformanceCounter::new();
         perf.start_of_frame();
@@ -174,6 +204,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "std", feature = "embassy-time"))]
     fn test_perfcounter_discard_measurement() {
         let mut perf = PerformanceCounter::new();
         perf.start_of_frame();
@@ -203,6 +234,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "std", feature = "embassy-time"))]
     fn test_perfcounter_fps_calculation() {
         let mut perf = PerformanceCounter::new();
         perf.start_of_frame();
@@ -218,6 +250,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "std", feature = "embassy-time"))]
     fn test_perfcounter_multiple_measurements() {
         let mut perf = PerformanceCounter::new();
         perf.start_of_frame();

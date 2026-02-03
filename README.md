@@ -10,19 +10,37 @@ A no_std 3D graphics engine for embedded systems, built around embedded-graphics
 
 This crate is fully `no_std` compatible by default. All core rendering features work in embedded environments without the standard library.
 
-### Optional `std` Feature
+### Feature Flags
 
-The `std` feature is only required for:
-- **Painter's Algorithm** - Uses `std::vec::Vec` for dynamic triangle sorting
-- **Examples** - Desktop simulator examples require `std`
+**`std`** (includes `perfcounter`)
+- Enables `std::vec::Vec` for Painter's Algorithm
+- Enables performance counter with std timing
+- Required for desktop simulator examples
 
-To use in a `no_std` embedded project:
+**`perfcounter`** (optional)
+- Enables `PerformanceCounter` module for FPS/timing measurements
+- Requires a timing source: either `std` or `embassy-time`
+- Automatically included when `std` is enabled
+
+**`embassy-time`** (optional)
+- Provides timing for `PerformanceCounter` on embedded targets
+- Use with `perfcounter` feature for embedded timing
+
+### Usage Examples
+
+Pure `no_std` embedded (no performance counter):
 ```toml
 [dependencies]
 embedded-3dgfx = { version = "0.1", default-features = false }
 ```
 
-To use with std features (examples, painter's algorithm):
+Embedded with Embassy timing and performance counter:
+```toml
+[dependencies]
+embedded-3dgfx = { version = "0.1", default-features = false, features = ["perfcounter", "embassy-time"] }
+```
+
+Desktop/simulator with all features:
 ```toml
 [dependencies]
 embedded-3dgfx = { version = "0.1", features = ["std"] }
