@@ -6,6 +6,28 @@ A no_std 3D graphics engine for embedded systems, built around embedded-graphics
 
 > **Note**: This is a fork of [embedded-gfx](https://github.com/Kezii/embedded-gfx) by [Kezii](https://github.com/Kezii). This fork adds texture mapping, fog/dithering effects, DMA rendering, and Z-buffer improvements.
 
+## no_std Compatibility
+
+This crate is fully `no_std` compatible by default. All core rendering features work in embedded environments without the standard library.
+
+### Optional `std` Feature
+
+The `std` feature is only required for:
+- **Painter's Algorithm** - Uses `std::vec::Vec` for dynamic triangle sorting
+- **Examples** - Desktop simulator examples require `std`
+
+To use in a `no_std` embedded project:
+```toml
+[dependencies]
+embedded-3dgfx = { version = "0.1", default-features = false }
+```
+
+To use with std features (examples, painter's algorithm):
+```toml
+[dependencies]
+embedded-3dgfx = { version = "0.1", features = ["std"] }
+```
+
 ## Features
 
 ### Core Rendering

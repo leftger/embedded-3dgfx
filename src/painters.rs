@@ -16,14 +16,12 @@
 //! Note: This module is only available when building with std (examples, tests)
 //! as it requires Vec for dynamic triangle collection.
 
-// This module requires std::vec::Vec for dynamic triangle collection
-// It's designed for use in std environments (examples, tests, PC builds)
 extern crate std;
 
 use crate::mesh::{K3dMesh, RenderMode};
 use crate::{DrawPrimitive, K3dengine};
+use core::cmp::Ordering;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
-use std::cmp::Ordering;
 use std::vec::Vec;
 
 /// A triangle with its average depth for sorting

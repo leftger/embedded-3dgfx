@@ -21,6 +21,7 @@ pub mod display_backend;
 pub mod draw;
 pub mod lut;
 pub mod mesh;
+#[cfg(feature = "std")]
 pub mod painters;
 pub mod perfcounter;
 pub mod swapchain;
