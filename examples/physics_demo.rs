@@ -1,9 +1,10 @@
-//! Physics demo: falling cubes with gravity
+//! Physics demo: falling cubes with collision detection
 //!
-//! Demonstrates the physics engine foundation:
+//! Demonstrates the physics engine:
 //! - Gravity and freefall
-//! - Multiple rigid bodies
-//! - Force application (impulse on keypress)
+//! - Sphere and AABB colliders
+//! - Automatic collision detection and impulse-based response
+//! - Dynamic-vs-static and dynamic-vs-dynamic collisions
 //! - Syncing physics state to mesh transforms
 //!
 //! Controls:
@@ -15,7 +16,7 @@ use embedded_3dgfx::K3dengine;
 use embedded_3dgfx::draw::draw;
 use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_3dgfx::perfcounter::PerformanceCounter;
-use embedded_3dgfx::physics::{BodyId, PhysicsWorld, RigidBody, sync_body_to_mesh};
+use embedded_3dgfx::physics::{BodyId, Collider, PhysicsWorld, RigidBody, sync_body_to_mesh};
 use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
@@ -78,7 +79,7 @@ fn main() {
     // Create cube geometry (shared by all cubes)
     let (vertices, faces, normals) = make_cube();
 
-    // Create physics world
+    // Create physics world (capacity: 8 bodies)
     let mut physics = PhysicsWorld::<8>::new();
     physics.set_gravity(Vector3::new(0.0, -9.81, 0.0));
 
@@ -105,11 +106,12 @@ fn main() {
     let mut meshes: Vec<K3dMesh> = Vec::new();
 
     for i in 0..NUM_CUBES {
-        // Physics body
+        // Physics body with sphere collider (approximates the cube)
         let body = RigidBody::new(1.0)
             .with_position(initial_positions[i])
             .with_damping(0.02)
-            .with_restitution(0.6);
+            .with_restitution(0.4)
+            .with_collider(Collider::Sphere { radius: 0.5 });
         let id = physics.add_body(body).unwrap();
         body_ids.push(id);
 
@@ -134,7 +136,19 @@ fn main() {
         meshes.push(mesh);
     }
 
-    // Add a static floor (just a visual, no physics collision yet)
+    // Static floor — AABB collider handles collision automatically
+    let _floor_id = physics
+        .add_body(
+            RigidBody::new_static()
+                .with_position(Vector3::new(0.0, -0.1, 0.0))
+                .with_collider(Collider::Aabb {
+                    half_extents: Vector3::new(10.0, 0.1, 10.0),
+                })
+                .with_restitution(0.5),
+        )
+        .unwrap();
+
+    // Floor visual mesh
     let floor_verts: Vec<[f32; 3]> = vec![
         [-8.0, 0.0, 5.0],
         [8.0, 0.0, 5.0],
@@ -203,23 +217,8 @@ fn main() {
             }
         }
 
-        // Step physics (2 substeps for stability)
-        physics.step_fixed(dt, 2);
-
-        // Simple floor collision: clamp Y >= 0.5 (half cube height) and bounce
-        for &id in &body_ids {
-            let body = physics.body_mut(id).unwrap();
-            if body.position.y < 0.5 {
-                body.position.y = 0.5;
-                if body.velocity.y < 0.0 {
-                    body.velocity.y = -body.velocity.y * body.restitution;
-                    // Stop tiny bounces
-                    if body.velocity.y.abs() < 0.5 {
-                        body.velocity.y = 0.0;
-                    }
-                }
-            }
-        }
+        // Step physics with collision detection (4 substeps, up to 16 contacts)
+        physics.step_fixed::<16>(dt, 4);
 
         // Sync physics -> meshes
         for (i, &id) in body_ids.iter().enumerate() {

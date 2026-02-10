@@ -1,28 +1,35 @@
-//! Physics engine foundation for embedded 3D graphics.
+//! Physics engine for embedded 3D graphics.
 //!
-//! Provides rigid body dynamics with linear motion (position, velocity, acceleration),
-//! gravity, force accumulation, and semi-implicit Euler integration.
+//! Provides rigid body dynamics with linear motion, gravity, collision detection,
+//! and semi-implicit Euler integration.
 //!
 //! Designed for `no_std` environments using fixed-capacity `heapless` collections.
 //!
+//! # Collider shapes
+//! Each body can optionally have a [`Collider`] attached. Supported shapes:
+//! - [`Collider::Sphere`] — radius-based, cheapest intersection test
+//! - [`Collider::Aabb`] — axis-aligned bounding box, defined by half-extents
+//!
 //! # Example
 //! ```
-//! use embedded_3dgfx::physics::{PhysicsWorld, RigidBody, BodyType};
+//! use embedded_3dgfx::physics::{PhysicsWorld, RigidBody, Collider};
 //! use nalgebra::Vector3;
 //!
 //! let mut world = PhysicsWorld::<16>::new();
 //! world.set_gravity(Vector3::new(0.0, -9.81, 0.0));
 //!
-//! let body = RigidBody::new(1.0)
-//!     .with_position(Vector3::new(0.0, 10.0, 0.0));
-//! let id = world.add_body(body).unwrap();
+//! let ball = RigidBody::new(1.0)
+//!     .with_position(Vector3::new(0.0, 10.0, 0.0))
+//!     .with_collider(Collider::Sphere { radius: 0.5 });
+//! let id = world.add_body(ball).unwrap();
 //!
-//! // Advance simulation by 16ms
-//! world.step(0.016);
+//! let floor = RigidBody::new_static()
+//!     .with_collider(Collider::Aabb { half_extents: Vector3::new(10.0, 0.1, 10.0) });
+//! world.add_body(floor).unwrap();
 //!
-//! let pos = world.body(id).unwrap().position;
-//! // Body has fallen due to gravity
-//! assert!(pos.y < 10.0);
+//! // Advance simulation — collision detection + response happen automatically
+//! // The const generic `8` sets the max number of contacts per step.
+//! world.step::<8>(0.016);
 //! ```
 
 use nalgebra::Vector3;
@@ -45,6 +52,33 @@ pub enum BodyType {
     Static,
 }
 
+/// A collision shape attached to a [`RigidBody`].
+///
+/// The collider is centered on the body's position. For AABBs the half-extents
+/// define the box dimensions along each axis from the center.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Collider {
+    /// A sphere defined by its radius.
+    Sphere { radius: f32 },
+    /// An axis-aligned bounding box defined by half-extents along each axis.
+    Aabb { half_extents: Vector3<f32> },
+}
+
+/// A detected contact between two bodies.
+///
+/// Contains the information needed for collision response (Phase 3).
+#[derive(Debug, Clone)]
+pub struct Contact {
+    /// ID of the first body.
+    pub body_a: BodyId,
+    /// ID of the second body.
+    pub body_b: BodyId,
+    /// Contact normal pointing from body A toward body B.
+    pub normal: Vector3<f32>,
+    /// Penetration depth (positive when overlapping).
+    pub penetration: f32,
+}
+
 /// A rigid body with linear dynamics.
 ///
 /// Tracks position, velocity, accumulated forces, and mass.
@@ -57,6 +91,7 @@ pub struct RigidBody {
     pub inv_mass: f32,
     pub body_type: BodyType,
     pub restitution: f32,
+    pub collider: Option<Collider>,
 
     /// Accumulated forces applied this frame. Cleared after each `step()`.
     force_accumulator: Vector3<f32>,
@@ -80,6 +115,7 @@ impl RigidBody {
             inv_mass: 1.0 / mass,
             body_type: BodyType::Dynamic,
             restitution: 0.5,
+            collider: None,
             force_accumulator: Vector3::zeros(),
             damping: 0.01,
         }
@@ -94,6 +130,7 @@ impl RigidBody {
             inv_mass: 0.0,
             body_type: BodyType::Static,
             restitution: 0.5,
+            collider: None,
             force_accumulator: Vector3::zeros(),
             damping: 0.0,
         }
@@ -120,6 +157,12 @@ impl RigidBody {
     /// Builder: set linear damping (0.0..=1.0).
     pub fn with_damping(mut self, damping: f32) -> Self {
         self.damping = damping.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Builder: attach a collider for collision detection.
+    pub fn with_collider(mut self, collider: Collider) -> Self {
+        self.collider = Some(collider);
         self
     }
 
@@ -176,6 +219,178 @@ impl RigidBody {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Collision detection
+// ---------------------------------------------------------------------------
+
+/// Test two colliders for intersection and generate a contact if overlapping.
+///
+/// Returns `None` if the shapes are not overlapping.
+/// The returned normal points from A toward B.
+fn collide(
+    pos_a: &Vector3<f32>,
+    col_a: &Collider,
+    pos_b: &Vector3<f32>,
+    col_b: &Collider,
+) -> Option<(Vector3<f32>, f32)> {
+    match (col_a, col_b) {
+        (Collider::Sphere { radius: ra }, Collider::Sphere { radius: rb }) => {
+            collide_sphere_sphere(pos_a, *ra, pos_b, *rb)
+        }
+        (Collider::Aabb { half_extents: ha }, Collider::Aabb { half_extents: hb }) => {
+            collide_aabb_aabb(pos_a, ha, pos_b, hb)
+        }
+        (Collider::Sphere { radius }, Collider::Aabb { half_extents }) => {
+            collide_sphere_aabb(pos_a, *radius, pos_b, half_extents)
+        }
+        (Collider::Aabb { half_extents }, Collider::Sphere { radius }) => {
+            // Flip: run sphere-aabb with swapped order, negate normal
+            let result = collide_sphere_aabb(pos_b, *radius, pos_a, half_extents);
+            result.map(|(normal, pen)| (-normal, pen))
+        }
+    }
+}
+
+/// Sphere vs Sphere intersection test.
+///
+/// Returns `(normal_a_to_b, penetration_depth)` or `None`.
+fn collide_sphere_sphere(
+    pos_a: &Vector3<f32>,
+    radius_a: f32,
+    pos_b: &Vector3<f32>,
+    radius_b: f32,
+) -> Option<(Vector3<f32>, f32)> {
+    let diff = pos_b - pos_a;
+    let dist_sq = diff.norm_squared();
+    let sum_r = radius_a + radius_b;
+
+    if dist_sq >= sum_r * sum_r {
+        return None;
+    }
+
+    let dist = dist_sq.sqrt();
+    let penetration = sum_r - dist;
+
+    let normal = if dist > 1e-6 {
+        diff / dist
+    } else {
+        // Perfectly overlapping — pick an arbitrary separation axis
+        Vector3::new(0.0, 1.0, 0.0)
+    };
+
+    Some((normal, penetration))
+}
+
+/// AABB vs AABB intersection test using the Separating Axis Theorem.
+///
+/// Returns `(normal_a_to_b, penetration_depth)` or `None`.
+fn collide_aabb_aabb(
+    pos_a: &Vector3<f32>,
+    half_a: &Vector3<f32>,
+    pos_b: &Vector3<f32>,
+    half_b: &Vector3<f32>,
+) -> Option<(Vector3<f32>, f32)> {
+    let diff = pos_b - pos_a;
+
+    let overlap_x = half_a.x + half_b.x - diff.x.abs();
+    if overlap_x <= 0.0 {
+        return None;
+    }
+    let overlap_y = half_a.y + half_b.y - diff.y.abs();
+    if overlap_y <= 0.0 {
+        return None;
+    }
+    let overlap_z = half_a.z + half_b.z - diff.z.abs();
+    if overlap_z <= 0.0 {
+        return None;
+    }
+
+    // Pick the axis with minimum penetration (least overlap)
+    if overlap_x <= overlap_y && overlap_x <= overlap_z {
+        let sign = if diff.x >= 0.0 { 1.0 } else { -1.0 };
+        Some((Vector3::new(sign, 0.0, 0.0), overlap_x))
+    } else if overlap_y <= overlap_z {
+        let sign = if diff.y >= 0.0 { 1.0 } else { -1.0 };
+        Some((Vector3::new(0.0, sign, 0.0), overlap_y))
+    } else {
+        let sign = if diff.z >= 0.0 { 1.0 } else { -1.0 };
+        Some((Vector3::new(0.0, 0.0, sign), overlap_z))
+    }
+}
+
+/// Sphere vs AABB intersection test.
+///
+/// Finds the closest point on the AABB to the sphere center, then checks distance.
+/// Returns `(normal_sphere_to_aabb, penetration_depth)` or `None`.
+fn collide_sphere_aabb(
+    sphere_pos: &Vector3<f32>,
+    sphere_radius: f32,
+    aabb_pos: &Vector3<f32>,
+    aabb_half: &Vector3<f32>,
+) -> Option<(Vector3<f32>, f32)> {
+    // Find the closest point on the AABB to the sphere center
+    let aabb_min = aabb_pos - aabb_half;
+    let aabb_max = aabb_pos + aabb_half;
+
+    let closest = Vector3::new(
+        sphere_pos.x.clamp(aabb_min.x, aabb_max.x),
+        sphere_pos.y.clamp(aabb_min.y, aabb_max.y),
+        sphere_pos.z.clamp(aabb_min.z, aabb_max.z),
+    );
+
+    let diff = sphere_pos - closest;
+    let dist_sq = diff.norm_squared();
+
+    if dist_sq >= sphere_radius * sphere_radius {
+        return None;
+    }
+
+    let dist = dist_sq.sqrt();
+
+    if dist > 1e-6 {
+        // Sphere center is outside the AABB — normal points from closest to sphere center
+        // We want normal from sphere toward AABB, so negate
+        let normal = -diff / dist;
+        let penetration = sphere_radius - dist;
+        Some((normal, penetration))
+    } else {
+        // Sphere center is inside the AABB — find the axis of least penetration
+        let dx_pos = aabb_max.x - sphere_pos.x;
+        let dx_neg = sphere_pos.x - aabb_min.x;
+        let dy_pos = aabb_max.y - sphere_pos.y;
+        let dy_neg = sphere_pos.y - aabb_min.y;
+        let dz_pos = aabb_max.z - sphere_pos.z;
+        let dz_neg = sphere_pos.z - aabb_min.z;
+
+        let mut min_dist = dx_pos;
+        let mut normal = Vector3::new(1.0, 0.0, 0.0);
+
+        if dx_neg < min_dist {
+            min_dist = dx_neg;
+            normal = Vector3::new(-1.0, 0.0, 0.0);
+        }
+        if dy_pos < min_dist {
+            min_dist = dy_pos;
+            normal = Vector3::new(0.0, 1.0, 0.0);
+        }
+        if dy_neg < min_dist {
+            min_dist = dy_neg;
+            normal = Vector3::new(0.0, -1.0, 0.0);
+        }
+        if dz_pos < min_dist {
+            min_dist = dz_pos;
+            normal = Vector3::new(0.0, 0.0, 1.0);
+        }
+        if dz_neg < min_dist {
+            min_dist = dz_neg;
+            normal = Vector3::new(0.0, 0.0, -1.0);
+        }
+
+        let penetration = sphere_radius + min_dist;
+        Some((normal, penetration))
+    }
+}
+
 /// The physics simulation world.
 ///
 /// Manages a fixed-capacity set of rigid bodies and steps the simulation forward.
@@ -195,7 +410,7 @@ impl RigidBody {
 ///     .with_position(Vector3::new(0.0, 5.0, 0.0));
 /// let id = world.add_body(body).unwrap();
 ///
-/// world.step(1.0 / 60.0);
+/// world.step::<8>(1.0 / 60.0);
 /// ```
 pub struct PhysicsWorld<const N: usize> {
     bodies: heapless::Vec<RigidBody, N>,
@@ -253,25 +468,119 @@ impl<const N: usize> PhysicsWorld<N> {
         self.bodies.iter_mut().enumerate().map(|(i, b)| (BodyId(i), b))
     }
 
+    /// Detect all collisions between bodies with colliders.
+    ///
+    /// Returns contacts in a fixed-capacity buffer. The `C` const generic sets the
+    /// maximum number of contacts per detection pass. For `N` bodies, worst case is
+    /// `N*(N-1)/2` pairs, so choose `C` accordingly.
+    ///
+    /// Pairs where both bodies lack a collider are skipped.
+    pub fn detect_collisions<const C: usize>(&self) -> heapless::Vec<Contact, C> {
+        let mut contacts = heapless::Vec::new();
+        let len = self.bodies.len();
+
+        for i in 0..len {
+            let body_a = &self.bodies[i];
+            let col_a = match &body_a.collider {
+                Some(c) => c,
+                None => continue,
+            };
+
+            for j in (i + 1)..len {
+                let body_b = &self.bodies[j];
+                let col_b = match &body_b.collider {
+                    Some(c) => c,
+                    None => continue,
+                };
+
+                // Skip pairs where both are static
+                if body_a.body_type == BodyType::Static && body_b.body_type == BodyType::Static {
+                    continue;
+                }
+
+                if let Some((normal, penetration)) =
+                    collide(&body_a.position, col_a, &body_b.position, col_b)
+                {
+                    let _ = contacts.push(Contact {
+                        body_a: BodyId(i),
+                        body_b: BodyId(j),
+                        normal,
+                        penetration,
+                    });
+                }
+            }
+        }
+
+        contacts
+    }
+
+    /// Resolve a set of contacts by applying positional correction and impulse response.
+    ///
+    /// Uses impulse-based resolution with restitution (bounciness).
+    pub fn resolve_contacts(&mut self, contacts: &[Contact]) {
+        for contact in contacts {
+            let inv_mass_a = self.bodies[contact.body_a.0].inv_mass;
+            let inv_mass_b = self.bodies[contact.body_b.0].inv_mass;
+            let inv_mass_sum = inv_mass_a + inv_mass_b;
+
+            if inv_mass_sum == 0.0 {
+                continue; // Both static
+            }
+
+            // --- Positional correction (push bodies apart) ---
+            let correction = contact.normal * (contact.penetration / inv_mass_sum);
+            self.bodies[contact.body_a.0].position -= correction * inv_mass_a;
+            self.bodies[contact.body_b.0].position += correction * inv_mass_b;
+
+            // --- Impulse-based velocity response ---
+            let vel_a = self.bodies[contact.body_a.0].velocity;
+            let vel_b = self.bodies[contact.body_b.0].velocity;
+            let relative_vel = vel_b - vel_a;
+            let vel_along_normal = relative_vel.dot(&contact.normal);
+
+            // Only resolve if bodies are moving toward each other
+            if vel_along_normal >= 0.0 {
+                continue;
+            }
+
+            // Use minimum restitution of the two bodies
+            let restitution = self.bodies[contact.body_a.0]
+                .restitution
+                .min(self.bodies[contact.body_b.0].restitution);
+
+            // Impulse magnitude: j = -(1 + e) * v_rel·n / (1/m_a + 1/m_b)
+            let j = -(1.0 + restitution) * vel_along_normal / inv_mass_sum;
+
+            let impulse = contact.normal * j;
+            self.bodies[contact.body_a.0].velocity -= impulse * inv_mass_a;
+            self.bodies[contact.body_b.0].velocity += impulse * inv_mass_b;
+        }
+    }
+
     /// Advance the simulation by `dt` seconds.
     ///
-    /// Integrates all dynamic bodies using semi-implicit Euler.
+    /// Integrates all dynamic bodies, then detects and resolves collisions.
     /// Forces accumulated on each body are consumed and cleared.
-    pub fn step(&mut self, dt: f32) {
+    ///
+    /// The `C` const generic sets the maximum number of collision contacts per step.
+    pub fn step<const C: usize>(&mut self, dt: f32) {
         let gravity = self.gravity;
         for body in self.bodies.iter_mut() {
             body.integrate(dt, gravity);
         }
+
+        let contacts = self.detect_collisions::<C>();
+        self.resolve_contacts(&contacts);
     }
 
     /// Advance the simulation using fixed-size substeps for stability.
     ///
-    /// Divides `dt` into `substeps` equal intervals. More substeps = more accurate
-    /// but more expensive. Useful when `dt` varies (e.g., frame-rate dependent).
-    pub fn step_fixed(&mut self, dt: f32, substeps: u32) {
+    /// Divides `dt` into `substeps` equal intervals. Each substep runs integration
+    /// and collision detection/response. More substeps = more accurate but more expensive.
+    pub fn step_fixed<const C: usize>(&mut self, dt: f32, substeps: u32) {
         let sub_dt = dt / substeps as f32;
         for _ in 0..substeps {
-            self.step(sub_dt);
+            self.step::<C>(sub_dt);
         }
     }
 }
@@ -282,7 +591,7 @@ impl<const N: usize> PhysicsWorld<N> {
 ///
 /// # Example
 /// ```ignore
-/// physics_world.step(dt);
+/// physics_world.step::<16>(dt);
 /// for (id, body) in physics_world.bodies() {
 ///     sync_body_to_mesh(body, &mut meshes[id]);
 /// }
@@ -435,7 +744,7 @@ mod tests {
         let id = world.add_body(body).unwrap();
 
         // Step 1 second
-        world.step(1.0);
+        world.step::<4>(1.0);
 
         let b = world.body(id).unwrap();
         // After 1s of freefall at -10 m/s²:
@@ -454,7 +763,7 @@ mod tests {
             .with_position(Vector3::new(0.0, 0.0, 0.0));
         let id = world.add_body(body).unwrap();
 
-        world.step(1.0);
+        world.step::<4>(1.0);
 
         let b = world.body(id).unwrap();
         assert!(approx_vec_eq(&b.position, &Vector3::zeros()));
@@ -470,13 +779,13 @@ mod tests {
 
         // Apply a force and step
         world.body_mut(id).unwrap().apply_force(Vector3::new(10.0, 0.0, 0.0));
-        world.step(1.0);
+        world.step::<4>(1.0);
 
         let b = world.body(id).unwrap();
         assert!(approx_eq(b.velocity.x, 10.0));
 
         // Forces should be cleared — another step with no forces should not accelerate further
-        world.step(1.0);
+        world.step::<4>(1.0);
         let b = world.body(id).unwrap();
         assert!(approx_eq(b.velocity.x, 10.0)); // unchanged (no damping, no forces)
     }
@@ -490,7 +799,7 @@ mod tests {
             .with_damping(0.1);
         let id = world.add_body(body).unwrap();
 
-        world.step(1.0);
+        world.step::<4>(1.0);
 
         let b = world.body(id).unwrap();
         // velocity should be reduced by damping
@@ -514,8 +823,8 @@ mod tests {
         let id2 = world_sub.add_body(body).unwrap();
 
         // Single large step vs 10 substeps
-        world_single.step(1.0);
-        world_sub.step_fixed(1.0, 10);
+        world_single.step::<4>(1.0);
+        world_sub.step_fixed::<4>(1.0, 10);
 
         // Both should give similar results (substeps are more accurate)
         let b1 = world_single.body(id1).unwrap();
@@ -548,7 +857,7 @@ mod tests {
 
         // Step for 2 seconds (at t=2, vy should be 10 - 20 = -10)
         for _ in 0..200 {
-            world.step(0.01);
+            world.step::<4>(0.01);
         }
 
         let b = world.body(id).unwrap();
@@ -556,5 +865,428 @@ mod tests {
         assert!((b.position.x - 20.0).abs() < 0.5);
         // y velocity: ~-10 m/s
         assert!((b.velocity.y - (-10.0)).abs() < 0.5);
+    }
+
+    // -- Collision detection tests --
+
+    #[test]
+    fn test_sphere_sphere_no_collision() {
+        let result = collide_sphere_sphere(
+            &Vector3::new(0.0, 0.0, 0.0),
+            1.0,
+            &Vector3::new(3.0, 0.0, 0.0),
+            1.0,
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_sphere_sphere_touching() {
+        let result = collide_sphere_sphere(
+            &Vector3::new(0.0, 0.0, 0.0),
+            1.0,
+            &Vector3::new(2.0, 0.0, 0.0),
+            1.0,
+        );
+        // Exactly touching — no penetration
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_sphere_sphere_overlapping() {
+        let result = collide_sphere_sphere(
+            &Vector3::new(0.0, 0.0, 0.0),
+            1.0,
+            &Vector3::new(1.5, 0.0, 0.0),
+            1.0,
+        );
+        let (normal, penetration) = result.unwrap();
+        assert!(approx_eq(penetration, 0.5));
+        // Normal should point from A to B (positive X)
+        assert!(normal.x > 0.0);
+        assert!(approx_eq(normal.y, 0.0));
+    }
+
+    #[test]
+    fn test_sphere_sphere_coincident() {
+        let result = collide_sphere_sphere(
+            &Vector3::new(0.0, 0.0, 0.0),
+            1.0,
+            &Vector3::new(0.0, 0.0, 0.0),
+            1.0,
+        );
+        let (normal, penetration) = result.unwrap();
+        assert!(approx_eq(penetration, 2.0));
+        // Should get an arbitrary valid normal
+        assert!(approx_eq(normal.norm(), 1.0));
+    }
+
+    #[test]
+    fn test_aabb_aabb_no_collision() {
+        let result = collide_aabb_aabb(
+            &Vector3::new(0.0, 0.0, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+            &Vector3::new(3.0, 0.0, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_aabb_aabb_overlapping_x() {
+        let result = collide_aabb_aabb(
+            &Vector3::new(0.0, 0.0, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+            &Vector3::new(1.5, 0.0, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+        );
+        let (normal, penetration) = result.unwrap();
+        // X axis has least penetration (0.5) vs Y (2.0) and Z (2.0)
+        assert!(approx_eq(penetration, 0.5));
+        assert!(approx_eq(normal.x, 1.0));
+    }
+
+    #[test]
+    fn test_aabb_aabb_overlapping_y() {
+        let result = collide_aabb_aabb(
+            &Vector3::new(0.0, 0.0, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+            &Vector3::new(0.0, 1.5, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+        );
+        let (normal, penetration) = result.unwrap();
+        assert!(approx_eq(penetration, 0.5));
+        assert!(approx_eq(normal.y, 1.0));
+    }
+
+    #[test]
+    fn test_aabb_aabb_negative_direction() {
+        let result = collide_aabb_aabb(
+            &Vector3::new(0.0, 0.0, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+            &Vector3::new(-1.5, 0.0, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+        );
+        let (normal, _) = result.unwrap();
+        // Normal should point negative X (from A toward B)
+        assert!(approx_eq(normal.x, -1.0));
+    }
+
+    #[test]
+    fn test_sphere_aabb_no_collision() {
+        let result = collide_sphere_aabb(
+            &Vector3::new(5.0, 0.0, 0.0),
+            1.0,
+            &Vector3::new(0.0, 0.0, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_sphere_aabb_overlapping() {
+        // Sphere at x=1.5 with radius 1, AABB from -1 to 1
+        // Closest point on AABB to sphere center is (1, 0, 0)
+        // Distance = 0.5, penetration = 1.0 - 0.5 = 0.5
+        let result = collide_sphere_aabb(
+            &Vector3::new(1.5, 0.0, 0.0),
+            1.0,
+            &Vector3::new(0.0, 0.0, 0.0),
+            &Vector3::new(1.0, 1.0, 1.0),
+        );
+        let (normal, penetration) = result.unwrap();
+        assert!(approx_eq(penetration, 0.5));
+        // Normal should point from sphere toward AABB (negative X)
+        assert!(normal.x < 0.0);
+    }
+
+    #[test]
+    fn test_sphere_aabb_sphere_inside() {
+        // Sphere center is inside the AABB
+        let result = collide_sphere_aabb(
+            &Vector3::new(0.0, 0.0, 0.0),
+            0.5,
+            &Vector3::new(0.0, 0.0, 0.0),
+            &Vector3::new(2.0, 1.0, 3.0),
+        );
+        let (normal, penetration) = result.unwrap();
+        // Least penetration is Y axis (1.0 to face), plus radius
+        assert!(penetration > 0.0);
+        assert!(approx_eq(normal.norm(), 1.0));
+    }
+
+    #[test]
+    fn test_sphere_aabb_from_below() {
+        // Sphere below AABB, overlapping on Y axis
+        let result = collide_sphere_aabb(
+            &Vector3::new(0.0, -1.5, 0.0),
+            1.0,
+            &Vector3::new(0.0, 0.0, 0.0),
+            &Vector3::new(2.0, 1.0, 2.0),
+        );
+        let (normal, penetration) = result.unwrap();
+        assert!(penetration > 0.0);
+        // Normal should point from sphere toward AABB (positive Y)
+        assert!(normal.y > 0.0);
+    }
+
+    // -- World-level collision tests --
+
+    #[test]
+    fn test_detect_collisions_no_colliders() {
+        let mut world = PhysicsWorld::<4>::new();
+        world.add_body(RigidBody::new(1.0)).unwrap();
+        world.add_body(RigidBody::new(1.0)).unwrap();
+
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 0);
+    }
+
+    #[test]
+    fn test_detect_collisions_sphere_sphere() {
+        let mut world = PhysicsWorld::<4>::new();
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(0.0, 0.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 }),
+            )
+            .unwrap();
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(1.5, 0.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 }),
+            )
+            .unwrap();
+
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 1);
+        assert!(approx_eq(contacts[0].penetration, 0.5));
+    }
+
+    #[test]
+    fn test_detect_collisions_skips_static_pairs() {
+        let mut world = PhysicsWorld::<4>::new();
+        world
+            .add_body(
+                RigidBody::new_static()
+                    .with_position(Vector3::new(0.0, 0.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 }),
+            )
+            .unwrap();
+        world
+            .add_body(
+                RigidBody::new_static()
+                    .with_position(Vector3::new(0.5, 0.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 }),
+            )
+            .unwrap();
+
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 0);
+    }
+
+    #[test]
+    fn test_collision_response_separates_bodies() {
+        let mut world = PhysicsWorld::<4>::new();
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(0.0, 0.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 })
+                    .with_restitution(0.0)
+                    .with_damping(0.0),
+            )
+            .unwrap();
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(1.0, 0.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 })
+                    .with_restitution(0.0)
+                    .with_damping(0.0),
+            )
+            .unwrap();
+
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 1);
+
+        world.resolve_contacts(&contacts);
+
+        // After resolution, bodies should be separated (no overlap)
+        let a = &world.body(BodyId(0)).unwrap().position;
+        let b = &world.body(BodyId(1)).unwrap().position;
+        let dist = (b - a).norm();
+        assert!(dist >= 2.0 - EPSILON);
+    }
+
+    #[test]
+    fn test_collision_response_bounce() {
+        let mut world = PhysicsWorld::<4>::new();
+        // Body A moving right
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(0.0, 0.0, 0.0))
+                    .with_velocity(Vector3::new(5.0, 0.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 })
+                    .with_restitution(1.0)
+                    .with_damping(0.0),
+            )
+            .unwrap();
+        // Body B stationary
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(1.5, 0.0, 0.0))
+                    .with_velocity(Vector3::zeros())
+                    .with_collider(Collider::Sphere { radius: 1.0 })
+                    .with_restitution(1.0)
+                    .with_damping(0.0),
+            )
+            .unwrap();
+
+        let contacts = world.detect_collisions::<4>();
+        world.resolve_contacts(&contacts);
+
+        let vel_a = world.body(BodyId(0)).unwrap().velocity;
+        let vel_b = world.body(BodyId(1)).unwrap().velocity;
+
+        // With equal masses and restitution=1.0 (perfectly elastic):
+        // A should stop, B should take A's velocity
+        assert!(approx_eq(vel_a.x, 0.0));
+        assert!(approx_eq(vel_b.x, 5.0));
+    }
+
+    #[test]
+    fn test_collision_dynamic_vs_static() {
+        let mut world = PhysicsWorld::<4>::new();
+        // Dynamic ball falling into static floor
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(0.0, 0.5, 0.0))
+                    .with_velocity(Vector3::new(0.0, -5.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 })
+                    .with_restitution(0.5)
+                    .with_damping(0.0),
+            )
+            .unwrap();
+        // Static floor
+        world
+            .add_body(
+                RigidBody::new_static()
+                    .with_position(Vector3::new(0.0, -1.0, 0.0))
+                    .with_collider(Collider::Aabb {
+                        half_extents: Vector3::new(10.0, 1.0, 10.0),
+                    })
+                    .with_restitution(1.0),
+            )
+            .unwrap();
+
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 1);
+
+        world.resolve_contacts(&contacts);
+
+        // Ball should bounce upward
+        let ball = world.body(BodyId(0)).unwrap();
+        assert!(ball.velocity.y > 0.0);
+
+        // Static floor should not move
+        let floor = world.body(BodyId(1)).unwrap();
+        assert!(approx_vec_eq(&floor.velocity, &Vector3::zeros()));
+        assert!(approx_eq(floor.position.y, -1.0));
+    }
+
+    #[test]
+    fn test_step_with_collisions() {
+        let mut world = PhysicsWorld::<4>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+
+        // Ball above a static floor
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(0.0, 2.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 0.5 })
+                    .with_restitution(0.5)
+                    .with_damping(0.0),
+            )
+            .unwrap();
+        world
+            .add_body(
+                RigidBody::new_static()
+                    .with_position(Vector3::new(0.0, 0.0, 0.0))
+                    .with_collider(Collider::Aabb {
+                        half_extents: Vector3::new(10.0, 0.1, 10.0),
+                    }),
+            )
+            .unwrap();
+
+        // Run for several steps — ball should not fall through the floor
+        for _ in 0..600 {
+            world.step::<4>(1.0 / 60.0);
+        }
+
+        let ball = world.body(BodyId(0)).unwrap();
+        // Ball center should be above the floor surface (floor top at y=0.1, ball radius=0.5)
+        assert!(ball.position.y >= 0.5);
+    }
+
+    #[test]
+    fn test_collider_builder() {
+        let body = RigidBody::new(1.0)
+            .with_collider(Collider::Sphere { radius: 2.0 });
+        assert_eq!(body.collider, Some(Collider::Sphere { radius: 2.0 }));
+
+        let body2 = RigidBody::new(1.0)
+            .with_collider(Collider::Aabb {
+                half_extents: Vector3::new(1.0, 2.0, 3.0),
+            });
+        assert!(matches!(body2.collider, Some(Collider::Aabb { .. })));
+    }
+
+    #[test]
+    fn test_no_collider_body_ignored() {
+        let mut world = PhysicsWorld::<4>::new();
+        // Body without collider
+        world.add_body(RigidBody::new(1.0)).unwrap();
+        // Body with collider overlapping the first
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_collider(Collider::Sphere { radius: 100.0 }),
+            )
+            .unwrap();
+
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 0); // No collision because first body has no collider
+    }
+
+    #[test]
+    fn test_aabb_sphere_collision_via_world() {
+        let mut world = PhysicsWorld::<4>::new();
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(0.0, 0.0, 0.0))
+                    .with_collider(Collider::Aabb {
+                        half_extents: Vector3::new(1.0, 1.0, 1.0),
+                    }),
+            )
+            .unwrap();
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(1.5, 0.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 }),
+            )
+            .unwrap();
+
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 1);
+        assert!(contacts[0].penetration > 0.0);
     }
 }
