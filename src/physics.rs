@@ -1,7 +1,7 @@
 //! Physics engine for embedded 3D graphics.
 //!
 //! Provides rigid body dynamics with linear motion, gravity, collision detection,
-//! and semi-implicit Euler integration.
+//! impulse-based response with Coulomb friction, and body lifecycle management.
 //!
 //! Designed for `no_std` environments using fixed-capacity `heapless` collections.
 //!
@@ -66,7 +66,7 @@ pub enum Collider {
 
 /// A detected contact between two bodies.
 ///
-/// Contains the information needed for collision response (Phase 3).
+/// Contains the information needed for collision response.
 #[derive(Debug, Clone)]
 pub struct Contact {
     /// ID of the first body.
@@ -93,12 +93,21 @@ pub struct RigidBody {
     pub restitution: f32,
     pub collider: Option<Collider>,
 
+    /// Coulomb friction coefficient (0.0 = frictionless ice, 1.0 = very rough).
+    /// During collision response the effective friction is the geometric mean
+    /// of both bodies' coefficients: `sqrt(mu_a * mu_b)`.
+    pub friction: f32,
+
     /// Accumulated forces applied this frame. Cleared after each `step()`.
     force_accumulator: Vector3<f32>,
 
     /// Linear damping factor (0.0 = no damping, 1.0 = full stop).
     /// Applied each step as `velocity *= (1.0 - damping)`.
     pub damping: f32,
+
+    /// Whether this body is active. Inactive bodies are skipped during
+    /// integration and collision detection. Set to `false` by [`PhysicsWorld::remove_body`].
+    pub active: bool,
 }
 
 impl RigidBody {
@@ -116,8 +125,10 @@ impl RigidBody {
             body_type: BodyType::Dynamic,
             restitution: 0.5,
             collider: None,
+            friction: 0.3,
             force_accumulator: Vector3::zeros(),
             damping: 0.01,
+            active: true,
         }
     }
 
@@ -131,8 +142,10 @@ impl RigidBody {
             body_type: BodyType::Static,
             restitution: 0.5,
             collider: None,
+            friction: 0.5,
             force_accumulator: Vector3::zeros(),
             damping: 0.0,
+            active: true,
         }
     }
 
@@ -163,6 +176,12 @@ impl RigidBody {
     /// Builder: attach a collider for collision detection.
     pub fn with_collider(mut self, collider: Collider) -> Self {
         self.collider = Some(collider);
+        self
+    }
+
+    /// Builder: set friction coefficient (0.0..=1.0).
+    pub fn with_friction(mut self, friction: f32) -> Self {
+        self.friction = friction.clamp(0.0, 1.0);
         self
     }
 
@@ -453,9 +472,47 @@ impl<const N: usize> PhysicsWorld<N> {
         self.bodies.get_mut(id.0)
     }
 
-    /// Returns the number of bodies in the world.
+    /// Returns the total number of bodies in the world (including inactive).
     pub fn body_count(&self) -> usize {
         self.bodies.len()
+    }
+
+    /// Returns the number of active bodies in the world.
+    pub fn active_body_count(&self) -> usize {
+        self.bodies.iter().filter(|b| b.active).count()
+    }
+
+    /// Deactivate a body, effectively removing it from the simulation.
+    ///
+    /// The body remains in the world (its slot is preserved) but it is skipped
+    /// during integration and collision detection. This avoids invalidating
+    /// existing [`BodyId`]s.
+    ///
+    /// Returns `true` if the body was found and deactivated, `false` if the ID
+    /// was out of bounds or the body was already inactive.
+    pub fn remove_body(&mut self, id: BodyId) -> bool {
+        if let Some(body) = self.bodies.get_mut(id.0) {
+            if body.active {
+                body.active = false;
+                body.velocity = Vector3::zeros();
+                body.force_accumulator = Vector3::zeros();
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Set whether a body is active. Inactive bodies are skipped during
+    /// integration and collision detection.
+    ///
+    /// Returns `true` if the body exists, `false` otherwise.
+    pub fn set_active(&mut self, id: BodyId, active: bool) -> bool {
+        if let Some(body) = self.bodies.get_mut(id.0) {
+            body.active = active;
+            true
+        } else {
+            false
+        }
     }
 
     /// Iterate over all bodies immutably.
@@ -481,6 +538,9 @@ impl<const N: usize> PhysicsWorld<N> {
 
         for i in 0..len {
             let body_a = &self.bodies[i];
+            if !body_a.active {
+                continue;
+            }
             let col_a = match &body_a.collider {
                 Some(c) => c,
                 None => continue,
@@ -488,6 +548,9 @@ impl<const N: usize> PhysicsWorld<N> {
 
             for j in (i + 1)..len {
                 let body_b = &self.bodies[j];
+                if !body_b.active {
+                    continue;
+                }
                 let col_b = match &body_b.collider {
                     Some(c) => c,
                     None => continue,
@@ -514,9 +577,11 @@ impl<const N: usize> PhysicsWorld<N> {
         contacts
     }
 
-    /// Resolve a set of contacts by applying positional correction and impulse response.
+    /// Resolve a set of contacts by applying positional correction, impulse response,
+    /// and Coulomb friction.
     ///
-    /// Uses impulse-based resolution with restitution (bounciness).
+    /// Uses impulse-based resolution with restitution (bounciness) and tangential
+    /// friction impulses clamped by the Coulomb friction cone.
     pub fn resolve_contacts(&mut self, contacts: &[Contact]) {
         for contact in contacts {
             let inv_mass_a = self.bodies[contact.body_a.0].inv_mass;
@@ -548,12 +613,41 @@ impl<const N: usize> PhysicsWorld<N> {
                 .restitution
                 .min(self.bodies[contact.body_b.0].restitution);
 
-            // Impulse magnitude: j = -(1 + e) * v_rel·n / (1/m_a + 1/m_b)
+            // Normal impulse magnitude: j = -(1 + e) * v_rel·n / (1/m_a + 1/m_b)
             let j = -(1.0 + restitution) * vel_along_normal / inv_mass_sum;
 
             let impulse = contact.normal * j;
             self.bodies[contact.body_a.0].velocity -= impulse * inv_mass_a;
             self.bodies[contact.body_b.0].velocity += impulse * inv_mass_b;
+
+            // --- Friction impulse (Coulomb model) ---
+            // Effective friction: geometric mean of both bodies' coefficients
+            let mu_a = self.bodies[contact.body_a.0].friction;
+            let mu_b = self.bodies[contact.body_b.0].friction;
+            let mu = (mu_a * mu_b).sqrt();
+
+            if mu > 1e-6 {
+                // Recompute relative velocity after normal impulse
+                let vel_a = self.bodies[contact.body_a.0].velocity;
+                let vel_b = self.bodies[contact.body_b.0].velocity;
+                let relative_vel = vel_b - vel_a;
+
+                // Tangent velocity = relative velocity minus normal component
+                let vn = relative_vel.dot(&contact.normal);
+                let tangent_vel = relative_vel - contact.normal * vn;
+                let tangent_speed = tangent_vel.norm();
+
+                if tangent_speed > 1e-6 {
+                    let tangent = tangent_vel / tangent_speed;
+
+                    // Friction impulse magnitude clamped by Coulomb cone: |jt| <= mu * |jn|
+                    let jt = (-tangent_speed / inv_mass_sum).max(-mu * j);
+
+                    let friction_impulse = tangent * jt;
+                    self.bodies[contact.body_a.0].velocity -= friction_impulse * inv_mass_a;
+                    self.bodies[contact.body_b.0].velocity += friction_impulse * inv_mass_b;
+                }
+            }
         }
     }
 
@@ -566,7 +660,9 @@ impl<const N: usize> PhysicsWorld<N> {
     pub fn step<const C: usize>(&mut self, dt: f32) {
         let gravity = self.gravity;
         for body in self.bodies.iter_mut() {
-            body.integrate(dt, gravity);
+            if body.active {
+                body.integrate(dt, gravity);
+            }
         }
 
         let contacts = self.detect_collisions::<C>();
@@ -1288,5 +1384,296 @@ mod tests {
         let contacts = world.detect_collisions::<4>();
         assert_eq!(contacts.len(), 1);
         assert!(contacts[0].penetration > 0.0);
+    }
+
+    // -- Phase 3: Friction tests --
+
+    #[test]
+    fn test_friction_builder() {
+        let body = RigidBody::new(1.0).with_friction(0.7);
+        assert!(approx_eq(body.friction, 0.7));
+    }
+
+    #[test]
+    fn test_friction_clamped() {
+        let body = RigidBody::new(1.0).with_friction(2.0);
+        assert!(approx_eq(body.friction, 1.0));
+        let body2 = RigidBody::new(1.0).with_friction(-0.5);
+        assert!(approx_eq(body2.friction, 0.0));
+    }
+
+    #[test]
+    fn test_default_friction_values() {
+        let dynamic = RigidBody::new(1.0);
+        assert!(approx_eq(dynamic.friction, 0.3));
+        let static_body = RigidBody::new_static();
+        assert!(approx_eq(static_body.friction, 0.5));
+    }
+
+    #[test]
+    fn test_friction_reduces_tangential_velocity() {
+        // A ball sliding along a static floor should slow down due to friction
+        let mut world = PhysicsWorld::<4>::new();
+
+        // Ball moving horizontally, resting on floor
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(0.0, 0.55, 0.0))
+                    .with_velocity(Vector3::new(10.0, -0.1, 0.0))
+                    .with_collider(Collider::Sphere { radius: 0.5 })
+                    .with_restitution(0.0)
+                    .with_friction(0.8)
+                    .with_damping(0.0),
+            )
+            .unwrap();
+        // Static floor
+        world
+            .add_body(
+                RigidBody::new_static()
+                    .with_position(Vector3::new(0.0, 0.0, 0.0))
+                    .with_collider(Collider::Aabb {
+                        half_extents: Vector3::new(50.0, 0.1, 50.0),
+                    })
+                    .with_friction(0.8),
+            )
+            .unwrap();
+
+        let initial_vx = 10.0_f32;
+
+        // Step and detect collision
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 1);
+        world.resolve_contacts(&contacts);
+
+        let ball = world.body(BodyId(0)).unwrap();
+        // Tangential (X) velocity should be reduced by friction
+        assert!(ball.velocity.x < initial_vx);
+        assert!(ball.velocity.x >= 0.0); // Should not reverse
+    }
+
+    #[test]
+    fn test_zero_friction_preserves_tangential_velocity() {
+        let mut world = PhysicsWorld::<4>::new();
+
+        // Ball sliding on frictionless surface
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(0.0, 0.55, 0.0))
+                    .with_velocity(Vector3::new(10.0, -1.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 0.5 })
+                    .with_restitution(0.0)
+                    .with_friction(0.0)
+                    .with_damping(0.0),
+            )
+            .unwrap();
+        world
+            .add_body(
+                RigidBody::new_static()
+                    .with_position(Vector3::new(0.0, 0.0, 0.0))
+                    .with_collider(Collider::Aabb {
+                        half_extents: Vector3::new(50.0, 0.1, 50.0),
+                    })
+                    .with_friction(0.0),
+            )
+            .unwrap();
+
+        let contacts = world.detect_collisions::<4>();
+        world.resolve_contacts(&contacts);
+
+        let ball = world.body(BodyId(0)).unwrap();
+        // With zero friction, tangential velocity should be preserved
+        assert!(approx_eq(ball.velocity.x, 10.0));
+    }
+
+    #[test]
+    fn test_high_friction_vs_low_friction() {
+        // Compare two identical scenarios with different friction values
+        let make_world = |friction: f32| -> PhysicsWorld<4> {
+            let mut world = PhysicsWorld::<4>::new();
+            world
+                .add_body(
+                    RigidBody::new(1.0)
+                        .with_position(Vector3::new(0.0, 0.55, 0.0))
+                        .with_velocity(Vector3::new(10.0, -1.0, 0.0))
+                        .with_collider(Collider::Sphere { radius: 0.5 })
+                        .with_restitution(0.0)
+                        .with_friction(friction)
+                        .with_damping(0.0),
+                )
+                .unwrap();
+            world
+                .add_body(
+                    RigidBody::new_static()
+                        .with_position(Vector3::new(0.0, 0.0, 0.0))
+                        .with_collider(Collider::Aabb {
+                            half_extents: Vector3::new(50.0, 0.1, 50.0),
+                        })
+                        .with_friction(friction),
+                )
+                .unwrap();
+            world
+        };
+
+        let mut world_low = make_world(0.1);
+        let mut world_high = make_world(1.0);
+
+        let contacts_low = world_low.detect_collisions::<4>();
+        world_low.resolve_contacts(&contacts_low);
+        let contacts_high = world_high.detect_collisions::<4>();
+        world_high.resolve_contacts(&contacts_high);
+
+        let vx_low = world_low.body(BodyId(0)).unwrap().velocity.x;
+        let vx_high = world_high.body(BodyId(0)).unwrap().velocity.x;
+
+        // High friction should slow tangential velocity more
+        assert!(vx_high < vx_low);
+    }
+
+    // -- Phase 3: Body lifecycle tests --
+
+    #[test]
+    fn test_body_active_by_default() {
+        let body = RigidBody::new(1.0);
+        assert!(body.active);
+        let static_body = RigidBody::new_static();
+        assert!(static_body.active);
+    }
+
+    #[test]
+    fn test_remove_body() {
+        let mut world = PhysicsWorld::<4>::new();
+        let id = world.add_body(RigidBody::new(1.0).with_velocity(Vector3::new(5.0, 0.0, 0.0))).unwrap();
+
+        assert_eq!(world.active_body_count(), 1);
+        assert!(world.remove_body(id));
+        assert_eq!(world.active_body_count(), 0);
+        assert_eq!(world.body_count(), 1); // Still in the world, just inactive
+
+        // Body velocity should be zeroed
+        let body = world.body(id).unwrap();
+        assert!(!body.active);
+        assert!(approx_vec_eq(&body.velocity, &Vector3::zeros()));
+    }
+
+    #[test]
+    fn test_remove_body_twice_returns_false() {
+        let mut world = PhysicsWorld::<4>::new();
+        let id = world.add_body(RigidBody::new(1.0)).unwrap();
+
+        assert!(world.remove_body(id));
+        assert!(!world.remove_body(id)); // Already inactive
+    }
+
+    #[test]
+    fn test_remove_body_invalid_id() {
+        let mut world = PhysicsWorld::<4>::new();
+        assert!(!world.remove_body(BodyId(99)));
+    }
+
+    #[test]
+    fn test_inactive_body_not_integrated() {
+        let mut world = PhysicsWorld::<4>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+
+        let id = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(0.0, 10.0, 0.0))
+                .with_damping(0.0),
+        ).unwrap();
+
+        world.remove_body(id);
+        world.step::<4>(1.0);
+
+        // Position should not change since body is inactive
+        let body = world.body(id).unwrap();
+        assert!(approx_eq(body.position.y, 10.0));
+    }
+
+    #[test]
+    fn test_inactive_body_not_collided() {
+        let mut world = PhysicsWorld::<4>::new();
+
+        // Two overlapping bodies
+        let id_a = world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::zeros())
+                    .with_collider(Collider::Sphere { radius: 1.0 }),
+            )
+            .unwrap();
+        world
+            .add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(0.5, 0.0, 0.0))
+                    .with_collider(Collider::Sphere { radius: 1.0 }),
+            )
+            .unwrap();
+
+        // Should detect collision when both active
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 1);
+
+        // Deactivate first body — no more collisions
+        world.remove_body(id_a);
+        let contacts = world.detect_collisions::<4>();
+        assert_eq!(contacts.len(), 0);
+    }
+
+    #[test]
+    fn test_set_active_reactivates_body() {
+        let mut world = PhysicsWorld::<4>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+
+        let id = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(0.0, 10.0, 0.0))
+                .with_damping(0.0),
+        ).unwrap();
+
+        // Deactivate, step (should not move)
+        world.remove_body(id);
+        world.step::<4>(1.0);
+        assert!(approx_eq(world.body(id).unwrap().position.y, 10.0));
+
+        // Reactivate, step (should fall)
+        world.set_active(id, true);
+        assert_eq!(world.active_body_count(), 1);
+        world.step::<4>(1.0);
+        assert!(world.body(id).unwrap().position.y < 10.0);
+    }
+
+    #[test]
+    fn test_active_body_count() {
+        let mut world = PhysicsWorld::<8>::new();
+        let id0 = world.add_body(RigidBody::new(1.0)).unwrap();
+        let id1 = world.add_body(RigidBody::new(1.0)).unwrap();
+        let _id2 = world.add_body(RigidBody::new(1.0)).unwrap();
+
+        assert_eq!(world.active_body_count(), 3);
+
+        world.remove_body(id0);
+        assert_eq!(world.active_body_count(), 2);
+
+        world.remove_body(id1);
+        assert_eq!(world.active_body_count(), 1);
+    }
+
+    #[test]
+    fn test_remove_preserves_other_body_ids() {
+        let mut world = PhysicsWorld::<4>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+
+        let id0 = world.add_body(RigidBody::new(1.0).with_position(Vector3::new(0.0, 10.0, 0.0)).with_damping(0.0)).unwrap();
+        let id1 = world.add_body(RigidBody::new(1.0).with_position(Vector3::new(5.0, 10.0, 0.0)).with_damping(0.0)).unwrap();
+
+        // Remove first, step
+        world.remove_body(id0);
+        world.step::<4>(1.0);
+
+        // First body should not have moved, second should have fallen
+        assert!(approx_eq(world.body(id0).unwrap().position.y, 10.0));
+        assert!(world.body(id1).unwrap().position.y < 10.0);
     }
 }

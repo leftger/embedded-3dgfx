@@ -1,15 +1,18 @@
-//! Physics demo: falling cubes with collision detection
+//! Physics demo: falling cubes with collision detection and friction
 //!
 //! Demonstrates the physics engine:
 //! - Gravity and freefall
 //! - Sphere and AABB colliders
 //! - Automatic collision detection and impulse-based response
+//! - Coulomb friction (each cube has a different friction coefficient)
 //! - Dynamic-vs-static and dynamic-vs-dynamic collisions
+//! - Body deactivation via remove_body()
 //! - Syncing physics state to mesh transforms
 //!
 //! Controls:
-//! - SPACE: Apply upward impulse to all cubes
-//! - R: Reset positions
+//! - SPACE: Apply upward impulse to all active cubes
+//! - D: Deactivate/remove the first active cube
+//! - R: Reset positions (reactivates all)
 //! - ESC: Exit
 
 use embedded_3dgfx::K3dengine;
@@ -67,7 +70,7 @@ fn main() {
     let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(640, 480));
     let output_settings = OutputSettingsBuilder::new().scale(1).build();
     let mut window = Window::new(
-        "Physics Demo - SPACE=impulse R=reset ESC=exit",
+        "Physics Demo - SPACE=impulse D=deactivate R=reset ESC=exit",
         &output_settings,
     );
 
@@ -105,12 +108,16 @@ fn main() {
     let mut body_ids: Vec<BodyId> = Vec::new();
     let mut meshes: Vec<K3dMesh> = Vec::new();
 
+    // Different friction per cube: from icy (0.0) to rough (1.0)
+    let frictions = [0.0, 0.2, 0.5, 0.8, 1.0];
+
     for i in 0..NUM_CUBES {
         // Physics body with sphere collider (approximates the cube)
         let body = RigidBody::new(1.0)
             .with_position(initial_positions[i])
             .with_damping(0.02)
             .with_restitution(0.4)
+            .with_friction(frictions[i % frictions.len()])
             .with_collider(Collider::Sphere { radius: 0.5 });
         let id = physics.add_body(body).unwrap();
         body_ids.push(id);
@@ -144,7 +151,8 @@ fn main() {
                 .with_collider(Collider::Aabb {
                     half_extents: Vector3::new(10.0, 0.1, 10.0),
                 })
-                .with_restitution(0.5),
+                .with_restitution(0.5)
+                .with_friction(0.6),
         )
         .unwrap();
 
@@ -177,9 +185,11 @@ fn main() {
 
     let dt = 1.0 / 60.0;
 
-    println!("Physics Demo");
+    println!("Physics Demo (with friction & body lifecycle)");
+    println!("Cube friction: 0.0 (icy) -> 1.0 (rough)");
     println!("SPACE = apply upward impulse");
-    println!("R = reset positions");
+    println!("D = deactivate first active cube");
+    println!("R = reset positions (reactivates all)");
     println!("ESC = exit");
 
     display.clear(Rgb565::BLACK).unwrap();
@@ -194,17 +204,27 @@ fn main() {
                 SimulatorEvent::KeyDown { keycode, .. } => match keycode {
                     Keycode::Escape => break 'running,
                     Keycode::Space => {
-                        // Apply upward impulse to all cubes
+                        // Apply upward impulse to all active cubes
                         for &id in &body_ids {
-                            physics
-                                .body_mut(id)
-                                .unwrap()
-                                .apply_impulse(Vector3::new(0.0, 8.0, 0.0));
+                            let body = physics.body_mut(id).unwrap();
+                            if body.active {
+                                body.apply_impulse(Vector3::new(0.0, 8.0, 0.0));
+                            }
+                        }
+                    }
+                    Keycode::D => {
+                        // Deactivate the first active cube
+                        for &id in &body_ids {
+                            if physics.body(id).unwrap().active {
+                                physics.remove_body(id);
+                                break;
+                            }
                         }
                     }
                     Keycode::R => {
-                        // Reset positions
+                        // Reset positions and reactivate all
                         for (i, &id) in body_ids.iter().enumerate() {
+                            physics.set_active(id, true);
                             let body = physics.body_mut(id).unwrap();
                             body.position = initial_positions[i];
                             body.velocity = Vector3::zeros();
@@ -220,10 +240,14 @@ fn main() {
         // Step physics with collision detection (4 substeps, up to 16 contacts)
         physics.step_fixed::<16>(dt, 4);
 
-        // Sync physics -> meshes
+        // Sync physics -> meshes (hide inactive bodies off-screen)
         for (i, &id) in body_ids.iter().enumerate() {
             let body = physics.body(id).unwrap();
-            sync_body_to_mesh(body, &mut meshes[i]);
+            if body.active {
+                sync_body_to_mesh(body, &mut meshes[i]);
+            } else {
+                meshes[i].set_position(0.0, -100.0, 0.0);
+            }
         }
 
         // Render
@@ -239,7 +263,7 @@ fn main() {
         Text::new(perf.get_text(), Point::new(10, 15), text_style)
             .draw(&mut display)
             .unwrap();
-        Text::new("SPACE=impulse R=reset", Point::new(10, 470), text_style)
+        Text::new("SPACE=impulse D=deactivate R=reset", Point::new(10, 470), text_style)
             .draw(&mut display)
             .unwrap();
 
