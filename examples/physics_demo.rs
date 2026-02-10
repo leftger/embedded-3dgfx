@@ -1,16 +1,18 @@
-//! Physics demo: falling cubes with collision detection and friction
+//! Physics demo: falling cubes with angular dynamics
 //!
 //! Demonstrates the physics engine:
 //! - Gravity and freefall
 //! - Sphere and AABB colliders
 //! - Automatic collision detection and impulse-based response
+//! - Angular dynamics: cubes spin on impact and from torque
 //! - Coulomb friction (each cube has a different friction coefficient)
 //! - Dynamic-vs-static and dynamic-vs-dynamic collisions
 //! - Body deactivation via remove_body()
-//! - Syncing physics state to mesh transforms
+//! - Syncing physics position + rotation to mesh transforms
 //!
 //! Controls:
 //! - SPACE: Apply upward impulse to all active cubes
+//! - T: Apply random torque to all active cubes (spin them!)
 //! - D: Deactivate/remove the first active cube
 //! - R: Reset positions (reactivates all)
 //! - ESC: Exit
@@ -27,7 +29,7 @@ use embedded_graphics_core::prelude::*;
 use embedded_graphics_simulator::{
     OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window, sdl2::Keycode,
 };
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point3, UnitQuaternion, Vector3};
 use std::thread;
 use std::time::Duration;
 
@@ -70,7 +72,7 @@ fn main() {
     let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(640, 480));
     let output_settings = OutputSettingsBuilder::new().scale(1).build();
     let mut window = Window::new(
-        "Physics Demo - SPACE=impulse D=deactivate R=reset ESC=exit",
+        "Physics Demo - SPACE=impulse T=torque D=deactivate R=reset ESC=exit",
         &output_settings,
     );
 
@@ -111,14 +113,27 @@ fn main() {
     // Different friction per cube: from icy (0.0) to rough (1.0)
     let frictions = [0.0, 0.2, 0.5, 0.8, 1.0];
 
+    // Give each cube a slight initial spin so they tumble as they fall
+    let initial_spins = [
+        Vector3::new(1.0, 0.5, 0.0),
+        Vector3::new(0.0, 1.0, 0.5),
+        Vector3::new(0.5, 0.0, 1.0),
+        Vector3::new(-0.5, 1.0, 0.0),
+        Vector3::new(0.0, -0.5, 1.0),
+    ];
+
     for i in 0..NUM_CUBES {
-        // Physics body with sphere collider (approximates the cube)
+        // Physics body with box inertia (matches cube geometry)
+        let half = Vector3::new(0.5, 0.5, 0.5);
         let body = RigidBody::new(1.0)
             .with_position(initial_positions[i])
             .with_damping(0.02)
             .with_restitution(0.4)
             .with_friction(frictions[i % frictions.len()])
-            .with_collider(Collider::Sphere { radius: 0.5 });
+            .with_collider(Collider::Sphere { radius: 0.5 })
+            .with_inertia_box(half)
+            .with_angular_velocity(initial_spins[i % initial_spins.len()])
+            .with_angular_damping(0.02);
         let id = physics.add_body(body).unwrap();
         body_ids.push(id);
 
@@ -185,9 +200,13 @@ fn main() {
 
     let dt = 1.0 / 60.0;
 
-    println!("Physics Demo (with friction & body lifecycle)");
+    // Simple pseudo-random torque per cube (deterministic, no rand crate)
+    let mut torque_counter: u32 = 0;
+
+    println!("Physics Demo (with angular dynamics)");
     println!("Cube friction: 0.0 (icy) -> 1.0 (rough)");
     println!("SPACE = apply upward impulse");
+    println!("T = apply torque (spin cubes)");
     println!("D = deactivate first active cube");
     println!("R = reset positions (reactivates all)");
     println!("ESC = exit");
@@ -212,6 +231,21 @@ fn main() {
                             }
                         }
                     }
+                    Keycode::T => {
+                        // Apply a different torque to each cube
+                        for (i, &id) in body_ids.iter().enumerate() {
+                            let body = physics.body_mut(id).unwrap();
+                            if body.active {
+                                torque_counter = torque_counter.wrapping_add(1);
+                                let angle = (torque_counter as f32 + i as f32) * 1.7;
+                                body.apply_angular_impulse(Vector3::new(
+                                    angle.sin() * 5.0,
+                                    angle.cos() * 3.0,
+                                    (angle * 0.7).sin() * 4.0,
+                                ));
+                            }
+                        }
+                    }
                     Keycode::D => {
                         // Deactivate the first active cube
                         for &id in &body_ids {
@@ -222,12 +256,14 @@ fn main() {
                         }
                     }
                     Keycode::R => {
-                        // Reset positions and reactivate all
+                        // Reset positions, orientations, and reactivate all
                         for (i, &id) in body_ids.iter().enumerate() {
                             physics.set_active(id, true);
                             let body = physics.body_mut(id).unwrap();
                             body.position = initial_positions[i];
                             body.velocity = Vector3::zeros();
+                            body.orientation = UnitQuaternion::identity();
+                            body.angular_velocity = initial_spins[i % initial_spins.len()];
                         }
                     }
                     _ => {}
@@ -240,7 +276,7 @@ fn main() {
         // Step physics with collision detection (4 substeps, up to 16 contacts)
         physics.step_fixed::<16>(dt, 4);
 
-        // Sync physics -> meshes (hide inactive bodies off-screen)
+        // Sync physics -> meshes (position + rotation; hide inactive off-screen)
         for (i, &id) in body_ids.iter().enumerate() {
             let body = physics.body(id).unwrap();
             if body.active {
@@ -263,7 +299,7 @@ fn main() {
         Text::new(perf.get_text(), Point::new(10, 15), text_style)
             .draw(&mut display)
             .unwrap();
-        Text::new("SPACE=impulse D=deactivate R=reset", Point::new(10, 470), text_style)
+        Text::new("SPC=impulse T=torque D=deact R=reset", Point::new(10, 470), text_style)
             .draw(&mut display)
             .unwrap();
 
