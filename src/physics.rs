@@ -1,8 +1,8 @@
 //! Physics engine for embedded 3D graphics.
 //!
 //! Provides rigid body dynamics with linear and angular motion, gravity,
-//! collision detection, impulse-based response with Coulomb friction, and
-//! body lifecycle management.
+//! collision detection, impulse-based response with Coulomb friction,
+//! body lifecycle management, and constraint joints.
 //!
 //! Designed for `no_std` environments using fixed-capacity `heapless` collections.
 //!
@@ -533,19 +533,83 @@ fn collide_sphere_aabb(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Constraints & Joints
+// ---------------------------------------------------------------------------
+
+/// Unique identifier for a constraint within a [`PhysicsWorld`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConstraintId(usize);
+
+/// A constraint (joint) between two bodies.
+///
+/// Constraints restrict the relative motion of bodies. Each variant stores
+/// body-local anchor points so the constraint follows the bodies as they move
+/// and rotate.
+#[derive(Debug, Clone)]
+pub enum Constraint {
+    /// Keeps two anchor points at a fixed distance (like a rigid rod).
+    ///
+    /// - `rest_length = 0`: the anchors are pinned together (point-to-point).
+    /// - `compliance > 0`: soft spring-like behaviour (higher = softer).
+    Distance {
+        body_a: BodyId,
+        body_b: BodyId,
+        /// Anchor offset in body A's local space.
+        anchor_a: Vector3<f32>,
+        /// Anchor offset in body B's local space.
+        anchor_b: Vector3<f32>,
+        /// Target distance between the two anchor points.
+        rest_length: f32,
+        /// Compliance (inverse stiffness). 0.0 = perfectly rigid.
+        compliance: f32,
+    },
+    /// Ball-socket joint: constrains two body-local points to coincide.
+    ///
+    /// Equivalent to a distance constraint with `rest_length = 0`, but
+    /// named for clarity.
+    BallSocket {
+        body_a: BodyId,
+        body_b: BodyId,
+        /// Anchor offset in body A's local space.
+        anchor_a: Vector3<f32>,
+        /// Anchor offset in body B's local space.
+        anchor_b: Vector3<f32>,
+        /// Compliance (inverse stiffness). 0.0 = perfectly rigid.
+        compliance: f32,
+    },
+    /// Fixed (weld) joint: locks relative position and orientation.
+    ///
+    /// Stores the initial relative orientation so it can be enforced.
+    Fixed {
+        body_a: BodyId,
+        body_b: BodyId,
+        /// Anchor offset in body A's local space.
+        anchor_a: Vector3<f32>,
+        /// Anchor offset in body B's local space.
+        anchor_b: Vector3<f32>,
+        /// Target relative orientation: `q_b * q_a⁻¹` at rest.
+        relative_orientation: UnitQuaternion<f32>,
+        /// Compliance (inverse stiffness). 0.0 = perfectly rigid.
+        compliance: f32,
+    },
+}
+
 /// The physics simulation world.
 ///
-/// Manages a fixed-capacity set of rigid bodies and steps the simulation forward.
+/// Manages a fixed-capacity set of rigid bodies and constraints, and steps
+/// the simulation forward.
 ///
 /// # Type Parameters
-/// * `N` - Maximum number of bodies (compile-time capacity for `heapless::Vec`).
+/// * `N` - Maximum number of bodies (compile-time capacity).
+/// * `M` - Maximum number of constraints/joints (compile-time capacity).
 ///
 /// # Example
 /// ```
-/// use embedded_3dgfx::physics::{PhysicsWorld, RigidBody};
+/// use embedded_3dgfx::physics::{PhysicsWorld, RigidBody, Constraint};
 /// use nalgebra::Vector3;
 ///
-/// let mut world = PhysicsWorld::<8>::new();
+/// let mut world = PhysicsWorld::<8, 4>::new();
 /// world.set_gravity(Vector3::new(0.0, -9.81, 0.0));
 ///
 /// let body = RigidBody::new(2.0)
@@ -554,17 +618,22 @@ fn collide_sphere_aabb(
 ///
 /// world.step::<8>(1.0 / 60.0);
 /// ```
-pub struct PhysicsWorld<const N: usize> {
+pub struct PhysicsWorld<const N: usize, const M: usize = 0> {
     bodies: heapless::Vec<RigidBody, N>,
+    constraints: heapless::Vec<Constraint, M>,
     gravity: Vector3<f32>,
+    /// Number of iterations for the constraint solver per substep.
+    pub solver_iterations: u32,
 }
 
-impl<const N: usize> PhysicsWorld<N> {
+impl<const N: usize, const M: usize> PhysicsWorld<N, M> {
     /// Create a new physics world with no gravity.
     pub fn new() -> Self {
         Self {
             bodies: heapless::Vec::new(),
+            constraints: heapless::Vec::new(),
             gravity: Vector3::zeros(),
+            solver_iterations: 4,
         }
     }
 
@@ -648,6 +717,122 @@ impl<const N: usize> PhysicsWorld<N> {
     /// Iterate over all bodies mutably.
     pub fn bodies_mut(&mut self) -> impl Iterator<Item = (BodyId, &mut RigidBody)> {
         self.bodies.iter_mut().enumerate().map(|(i, b)| (BodyId(i), b))
+    }
+
+    // -- Constraint management --
+
+    /// Add a constraint to the world. Returns its [`ConstraintId`], or `None`
+    /// if at capacity.
+    pub fn add_constraint(&mut self, constraint: Constraint) -> Option<ConstraintId> {
+        let id = ConstraintId(self.constraints.len());
+        self.constraints.push(constraint).ok()?;
+        Some(id)
+    }
+
+    /// Get an immutable reference to a constraint by its ID.
+    pub fn constraint(&self, id: ConstraintId) -> Option<&Constraint> {
+        self.constraints.get(id.0)
+    }
+
+    /// Get a mutable reference to a constraint by its ID.
+    pub fn constraint_mut(&mut self, id: ConstraintId) -> Option<&mut Constraint> {
+        self.constraints.get_mut(id.0)
+    }
+
+    /// Remove a constraint by ID (swap-removes; invalidates the last ID).
+    ///
+    /// Returns `true` if a constraint was removed, `false` if the ID was
+    /// out of bounds.
+    pub fn remove_constraint(&mut self, id: ConstraintId) -> bool {
+        if id.0 < self.constraints.len() {
+            self.constraints.swap_remove(id.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns the number of constraints in the world.
+    pub fn constraint_count(&self) -> usize {
+        self.constraints.len()
+    }
+
+    /// Helper: create a distance constraint between two bodies.
+    ///
+    /// Anchors are in body-local space. The rest length is computed
+    /// automatically from the current body positions.
+    pub fn add_distance_constraint(
+        &mut self,
+        body_a: BodyId,
+        anchor_a: Vector3<f32>,
+        body_b: BodyId,
+        anchor_b: Vector3<f32>,
+        compliance: f32,
+    ) -> Option<ConstraintId> {
+        let world_a = self.body_to_world(body_a, &anchor_a)?;
+        let world_b = self.body_to_world(body_b, &anchor_b)?;
+        let rest_length = (world_b - world_a).norm();
+
+        self.add_constraint(Constraint::Distance {
+            body_a,
+            body_b,
+            anchor_a,
+            anchor_b,
+            rest_length,
+            compliance,
+        })
+    }
+
+    /// Helper: create a ball-socket joint between two bodies.
+    ///
+    /// Anchors are in body-local space. The two anchor points will be
+    /// constrained to coincide (distance = 0).
+    pub fn add_ball_socket(
+        &mut self,
+        body_a: BodyId,
+        anchor_a: Vector3<f32>,
+        body_b: BodyId,
+        anchor_b: Vector3<f32>,
+        compliance: f32,
+    ) -> Option<ConstraintId> {
+        self.add_constraint(Constraint::BallSocket {
+            body_a,
+            body_b,
+            anchor_a,
+            anchor_b,
+            compliance,
+        })
+    }
+
+    /// Helper: create a fixed (weld) joint between two bodies.
+    ///
+    /// Stores the current relative orientation as the target.
+    pub fn add_fixed_joint(
+        &mut self,
+        body_a: BodyId,
+        anchor_a: Vector3<f32>,
+        body_b: BodyId,
+        anchor_b: Vector3<f32>,
+        compliance: f32,
+    ) -> Option<ConstraintId> {
+        let qa = self.bodies.get(body_a.0)?.orientation;
+        let qb = self.bodies.get(body_b.0)?.orientation;
+        let relative_orientation = qb * qa.inverse();
+
+        self.add_constraint(Constraint::Fixed {
+            body_a,
+            body_b,
+            anchor_a,
+            anchor_b,
+            relative_orientation,
+            compliance,
+        })
+    }
+
+    /// Convert a body-local point to world space.
+    fn body_to_world(&self, id: BodyId, local_point: &Vector3<f32>) -> Option<Vector3<f32>> {
+        let body = self.bodies.get(id.0)?;
+        Some(body.position + body.orientation * local_point)
     }
 
     /// Detect all collisions between bodies with colliders.
@@ -817,10 +1002,239 @@ impl<const N: usize> PhysicsWorld<N> {
         }
     }
 
+    // -- Constraint solver --
+
+    /// Solve all constraints using position-based correction.
+    ///
+    /// Uses Extended Position-Based Dynamics (XPBD) style positional correction
+    /// with compliance for soft constraints. Each constraint is solved
+    /// `solver_iterations` times per call for convergence.
+    pub fn solve_constraints(&mut self, dt: f32) {
+        if self.constraints.is_empty() || dt <= 0.0 {
+            return;
+        }
+
+        let iterations = self.solver_iterations;
+        for _ in 0..iterations {
+            // Iterate constraints by index to satisfy the borrow checker
+            for ci in 0..self.constraints.len() {
+                // Clone the constraint to avoid borrow conflict
+                let constraint = self.constraints[ci].clone();
+                match &constraint {
+                    Constraint::Distance {
+                        body_a,
+                        body_b,
+                        anchor_a,
+                        anchor_b,
+                        rest_length,
+                        compliance,
+                    } => {
+                        self.solve_distance(
+                            body_a.0,
+                            anchor_a,
+                            body_b.0,
+                            anchor_b,
+                            *rest_length,
+                            *compliance,
+                            dt,
+                        );
+                    }
+                    Constraint::BallSocket {
+                        body_a,
+                        body_b,
+                        anchor_a,
+                        anchor_b,
+                        compliance,
+                    } => {
+                        self.solve_distance(
+                            body_a.0,
+                            anchor_a,
+                            body_b.0,
+                            anchor_b,
+                            0.0,
+                            *compliance,
+                            dt,
+                        );
+                    }
+                    Constraint::Fixed {
+                        body_a,
+                        body_b,
+                        anchor_a,
+                        anchor_b,
+                        relative_orientation,
+                        compliance,
+                    } => {
+                        // Positional part (same as ball-socket)
+                        self.solve_distance(
+                            body_a.0,
+                            anchor_a,
+                            body_b.0,
+                            anchor_b,
+                            0.0,
+                            *compliance,
+                            dt,
+                        );
+                        // Rotational part
+                        self.solve_orientation(
+                            body_a.0,
+                            body_b.0,
+                            relative_orientation,
+                            *compliance,
+                            dt,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Solve a single distance constraint between two anchor points.
+    ///
+    /// Uses XPBD positional correction: applies positional deltas and
+    /// corresponding velocity updates to both bodies.
+    fn solve_distance(
+        &mut self,
+        a: usize,
+        anchor_a: &Vector3<f32>,
+        b: usize,
+        anchor_b: &Vector3<f32>,
+        rest_length: f32,
+        compliance: f32,
+        dt: f32,
+    ) {
+        if !self.bodies[a].active && !self.bodies[b].active {
+            return;
+        }
+
+        // World-space anchor positions
+        let ra = self.bodies[a].orientation * anchor_a;
+        let rb = self.bodies[b].orientation * anchor_b;
+        let world_a = self.bodies[a].position + ra;
+        let world_b = self.bodies[b].position + rb;
+
+        let diff = world_b - world_a;
+        let dist = diff.norm();
+
+        let error = dist - rest_length;
+        if error.abs() < 1e-6 {
+            return;
+        }
+
+        // Direction of correction
+        let n = if dist > 1e-6 {
+            diff / dist
+        } else {
+            Vector3::new(0.0, 1.0, 0.0) // Arbitrary axis for zero-length
+        };
+
+        // Generalized inverse masses (linear + angular contribution)
+        let inv_mass_a = self.bodies[a].inv_mass;
+        let inv_mass_b = self.bodies[b].inv_mass;
+        let inv_inertia_a = self.bodies[a].inv_inertia_world();
+        let inv_inertia_b = self.bodies[b].inv_inertia_world();
+
+        let ra_cross_n = ra.cross(&n);
+        let rb_cross_n = rb.cross(&n);
+        let w_a = inv_mass_a + ra_cross_n.dot(&(inv_inertia_a * ra_cross_n));
+        let w_b = inv_mass_b + rb_cross_n.dot(&(inv_inertia_b * rb_cross_n));
+        let w_sum = w_a + w_b;
+
+        if w_sum <= 0.0 {
+            return;
+        }
+
+        // XPBD: compliance term scaled by dt²
+        let alpha = compliance / (dt * dt);
+        let delta_lambda = -error / (w_sum + alpha);
+        let correction = n * delta_lambda;
+
+        // Apply positional correction
+        self.bodies[a].position -= correction * inv_mass_a;
+        self.bodies[b].position += correction * inv_mass_b;
+
+        // Apply angular correction
+        self.bodies[a].angular_velocity -= inv_inertia_a * ra.cross(&correction) / dt;
+        self.bodies[b].angular_velocity += inv_inertia_b * rb.cross(&correction) / dt;
+
+        // Update linear velocities from positional correction
+        self.bodies[a].velocity -= correction * inv_mass_a / dt;
+        self.bodies[b].velocity += correction * inv_mass_b / dt;
+    }
+
+    /// Solve the rotational part of a fixed (weld) joint.
+    ///
+    /// Applies angular corrections to enforce the target relative orientation.
+    fn solve_orientation(
+        &mut self,
+        a: usize,
+        b: usize,
+        target_rel: &UnitQuaternion<f32>,
+        compliance: f32,
+        dt: f32,
+    ) {
+        if !self.bodies[a].active && !self.bodies[b].active {
+            return;
+        }
+
+        let qa = self.bodies[a].orientation;
+        let qb = self.bodies[b].orientation;
+
+        // Current relative orientation vs target
+        let current_rel = qb * qa.inverse();
+        let error_q = current_rel * target_rel.inverse();
+
+        // Extract the rotation axis and angle from the error quaternion
+        let error_inner = error_q.into_inner();
+        let error_vec = Vector3::new(error_inner.i, error_inner.j, error_inner.k);
+
+        // For small angles: rotation vector ≈ 2 * [i, j, k] (when w > 0)
+        let error = if error_inner.w >= 0.0 {
+            error_vec * 2.0
+        } else {
+            -error_vec * 2.0
+        };
+
+        if error.norm_squared() < 1e-10 {
+            return;
+        }
+
+        let inv_inertia_a = self.bodies[a].inv_inertia_world();
+        let inv_inertia_b = self.bodies[b].inv_inertia_world();
+
+        // Generalized inverse masses for rotation
+        // For each axis, the angular "mass" contribution is n · (I⁻¹ * n)
+        // Simplified: use the sum of diagonal elements as effective inverse mass
+        let w_a = if self.bodies[a].body_type == BodyType::Dynamic {
+            inv_inertia_a[(0, 0)] + inv_inertia_a[(1, 1)] + inv_inertia_a[(2, 2)]
+        } else {
+            0.0
+        };
+        let w_b = if self.bodies[b].body_type == BodyType::Dynamic {
+            inv_inertia_b[(0, 0)] + inv_inertia_b[(1, 1)] + inv_inertia_b[(2, 2)]
+        } else {
+            0.0
+        };
+        let w_sum = w_a + w_b;
+        if w_sum <= 0.0 {
+            return;
+        }
+
+        let alpha = compliance / (dt * dt);
+        let delta_lambda = -error / (w_sum + alpha);
+
+        // Apply angular correction
+        if self.bodies[a].body_type == BodyType::Dynamic {
+            self.bodies[a].angular_velocity -= inv_inertia_a * delta_lambda / dt;
+        }
+        if self.bodies[b].body_type == BodyType::Dynamic {
+            self.bodies[b].angular_velocity += inv_inertia_b * delta_lambda / dt;
+        }
+    }
+
     /// Advance the simulation by `dt` seconds.
     ///
-    /// Integrates all dynamic bodies, then detects and resolves collisions.
-    /// Forces accumulated on each body are consumed and cleared.
+    /// Integrates all dynamic bodies, detects and resolves collisions, then
+    /// solves constraints.
     ///
     /// The `C` const generic sets the maximum number of collision contacts per step.
     pub fn step<const C: usize>(&mut self, dt: f32) {
@@ -833,12 +1247,13 @@ impl<const N: usize> PhysicsWorld<N> {
 
         let contacts = self.detect_collisions::<C>();
         self.resolve_contacts(&contacts);
+        self.solve_constraints(dt);
     }
 
     /// Advance the simulation using fixed-size substeps for stability.
     ///
-    /// Divides `dt` into `substeps` equal intervals. Each substep runs integration
-    /// and collision detection/response. More substeps = more accurate but more expensive.
+    /// Divides `dt` into `substeps` equal intervals. Each substep runs integration,
+    /// collision detection/response, and constraint solving.
     pub fn step_fixed<const C: usize>(&mut self, dt: f32, substeps: u32) {
         let sub_dt = dt / substeps as f32;
         for _ in 0..substeps {
@@ -2149,5 +2564,485 @@ mod tests {
         // With zero friction and head-on collision, no angular velocity should be generated
         assert!(omega_a.norm() < EPSILON);
         assert!(omega_b.norm() < EPSILON);
+    }
+
+    // -- Phase 5: Constraint & joint tests --
+
+    #[test]
+    fn test_add_constraint() {
+        let mut world = PhysicsWorld::<4, 4>::new();
+        let a = world.add_body(RigidBody::new(1.0)).unwrap();
+        let b = world.add_body(RigidBody::new(1.0)).unwrap();
+
+        let cid = world.add_constraint(Constraint::Distance {
+            body_a: a,
+            body_b: b,
+            anchor_a: Vector3::zeros(),
+            anchor_b: Vector3::zeros(),
+            rest_length: 2.0,
+            compliance: 0.0,
+        }).unwrap();
+
+        assert_eq!(world.constraint_count(), 1);
+        assert!(world.constraint(cid).is_some());
+    }
+
+    #[test]
+    fn test_add_constraint_at_capacity() {
+        let mut world = PhysicsWorld::<4, 1>::new();
+        let a = world.add_body(RigidBody::new(1.0)).unwrap();
+        let b = world.add_body(RigidBody::new(1.0)).unwrap();
+
+        let c = Constraint::BallSocket {
+            body_a: a,
+            body_b: b,
+            anchor_a: Vector3::zeros(),
+            anchor_b: Vector3::zeros(),
+            compliance: 0.0,
+        };
+        assert!(world.add_constraint(c.clone()).is_some());
+        assert!(world.add_constraint(c).is_none()); // At capacity
+    }
+
+    #[test]
+    fn test_remove_constraint() {
+        let mut world = PhysicsWorld::<4, 4>::new();
+        let a = world.add_body(RigidBody::new(1.0)).unwrap();
+        let b = world.add_body(RigidBody::new(1.0)).unwrap();
+
+        let cid = world.add_ball_socket(a, Vector3::zeros(), b, Vector3::zeros(), 0.0).unwrap();
+        assert_eq!(world.constraint_count(), 1);
+
+        assert!(world.remove_constraint(cid));
+        assert_eq!(world.constraint_count(), 0);
+    }
+
+    #[test]
+    fn test_remove_constraint_invalid_id() {
+        let mut world = PhysicsWorld::<4, 4>::new();
+        assert!(!world.remove_constraint(ConstraintId(99)));
+    }
+
+    #[test]
+    fn test_distance_constraint_maintains_length() {
+        let mut world = PhysicsWorld::<4, 4>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+
+        // Two bodies connected by a rigid rod of length 3
+        let a = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(0.0, 5.0, 0.0))
+                .with_damping(0.0)
+                .with_angular_damping(0.0),
+        ).unwrap();
+        let b = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(3.0, 5.0, 0.0))
+                .with_damping(0.0)
+                .with_angular_damping(0.0),
+        ).unwrap();
+
+        world.add_distance_constraint(
+            a, Vector3::zeros(),
+            b, Vector3::zeros(),
+            0.0,
+        ).unwrap();
+
+        // Run simulation — gravity pulls both down, constraint keeps distance
+        for _ in 0..200 {
+            world.step::<4>(1.0 / 60.0);
+        }
+
+        let pa = world.body(a).unwrap().position;
+        let pb = world.body(b).unwrap().position;
+        let dist = (pb - pa).norm();
+        // Distance should stay close to 3.0
+        assert!((dist - 3.0).abs() < 0.3,
+            "Expected distance ~3.0, got {}", dist);
+    }
+
+    #[test]
+    fn test_ball_socket_keeps_points_together() {
+        // Two bodies at the same position with a ball-socket joint (zero anchors)
+        // should stay together under gravity
+        let mut world = PhysicsWorld::<4, 4>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+        world.solver_iterations = 8;
+
+        let a = world.add_body(
+            RigidBody::new_static()
+                .with_position(Vector3::new(0.0, 10.0, 0.0)),
+        ).unwrap();
+
+        let b = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(0.0, 10.0, 0.0))
+                .with_damping(0.01)
+                .with_angular_damping(0.01),
+        ).unwrap();
+
+        // Ball-socket: pin body B's center to body A's center
+        world.add_ball_socket(
+            a, Vector3::zeros(),
+            b, Vector3::zeros(),
+            0.0,
+        ).unwrap();
+
+        for _ in 0..120 {
+            world.step::<4>(1.0 / 60.0);
+        }
+
+        // Body B should stay close to A (gravity pulls it down but joint holds)
+        let pa = world.body(a).unwrap().position;
+        let pb = world.body(b).unwrap().position;
+        let gap = (pb - pa).norm();
+        assert!(gap < 1.0, "Ball-socket gap too large: {}", gap);
+    }
+
+    #[test]
+    fn test_pendulum_swings_under_gravity() {
+        let mut world = PhysicsWorld::<4, 4>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+
+        let anchor = world.add_body(
+            RigidBody::new_static()
+                .with_position(Vector3::new(0.0, 10.0, 0.0)),
+        ).unwrap();
+
+        let bob = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(3.0, 10.0, 0.0))
+                .with_damping(0.0)
+                .with_angular_damping(0.0),
+        ).unwrap();
+
+        // Distance constraint (rod of length 3)
+        world.add_distance_constraint(
+            anchor, Vector3::zeros(),
+            bob, Vector3::zeros(),
+            0.0,
+        ).unwrap();
+
+        // Bob starts at same height as anchor, should swing down
+        let initial_y = 10.0;
+
+        for _ in 0..120 {
+            world.step::<4>(1.0 / 60.0);
+        }
+
+        let bob_pos = world.body(bob).unwrap().position;
+        // Bob should have swung below the anchor
+        assert!(bob_pos.y < initial_y, "Bob should swing down, y={}", bob_pos.y);
+    }
+
+    #[test]
+    fn test_soft_distance_constraint() {
+        // A soft spring should allow the bodies to overshoot the rest length
+        let mut world = PhysicsWorld::<4, 4>::new();
+        world.set_gravity(Vector3::zeros());
+
+        let a = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(0.0, 0.0, 0.0))
+                .with_damping(0.0)
+                .with_angular_damping(0.0),
+        ).unwrap();
+        let b = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(5.0, 0.0, 0.0))
+                .with_damping(0.0)
+                .with_angular_damping(0.0),
+        ).unwrap();
+
+        // Soft spring with rest_length=2, compliance=0.01 (springy)
+        world.add_constraint(Constraint::Distance {
+            body_a: a,
+            body_b: b,
+            anchor_a: Vector3::zeros(),
+            anchor_b: Vector3::zeros(),
+            rest_length: 2.0,
+            compliance: 0.01,
+        }).unwrap();
+
+        // Step a few times
+        for _ in 0..60 {
+            world.step::<4>(1.0 / 60.0);
+        }
+
+        let pa = world.body(a).unwrap().position;
+        let pb = world.body(b).unwrap().position;
+        let dist = (pb - pa).norm();
+        // With compliance, it should have moved toward rest_length but may not be exact
+        assert!(dist < 5.0, "Spring should have contracted, dist={}", dist);
+    }
+
+    #[test]
+    fn test_fixed_joint_preserves_relative_orientation() {
+        let mut world = PhysicsWorld::<4, 4>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+
+        let a = world.add_body(
+            RigidBody::new_static()
+                .with_position(Vector3::new(0.0, 10.0, 0.0)),
+        ).unwrap();
+        let b = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(2.0, 10.0, 0.0))
+                .with_inertia_box(Vector3::new(0.5, 0.5, 0.5))
+                .with_damping(0.0)
+                .with_angular_damping(0.0),
+        ).unwrap();
+
+        // Fixed joint — should preserve relative orientation
+        world.add_fixed_joint(
+            a, Vector3::new(2.0, 0.0, 0.0),
+            b, Vector3::zeros(),
+            0.0,
+        ).unwrap();
+
+        // Store initial relative orientation
+        let initial_qa = world.body(a).unwrap().orientation;
+        let initial_qb = world.body(b).unwrap().orientation;
+        let initial_rel = initial_qb * initial_qa.inverse();
+
+        for _ in 0..200 {
+            world.step::<4>(1.0 / 60.0);
+        }
+
+        // Relative orientation should be similar to initial
+        let qa = world.body(a).unwrap().orientation;
+        let qb = world.body(b).unwrap().orientation;
+        let current_rel = qb * qa.inverse();
+        let error = current_rel * initial_rel.inverse();
+        let angle = error.angle();
+        assert!(angle < 0.5, "Fixed joint orientation drift: {} rad", angle);
+    }
+
+    #[test]
+    fn test_chain_of_distance_constraints() {
+        // Three bodies connected by two distance constraints forming a chain
+        let mut world = PhysicsWorld::<8, 8>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+        world.solver_iterations = 8;
+
+        let anchor = world.add_body(
+            RigidBody::new_static()
+                .with_position(Vector3::new(0.0, 10.0, 0.0)),
+        ).unwrap();
+        let link1 = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(0.0, 8.0, 0.0))
+                .with_damping(0.01)
+                .with_angular_damping(0.01),
+        ).unwrap();
+        let link2 = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(0.0, 6.0, 0.0))
+                .with_damping(0.01)
+                .with_angular_damping(0.01),
+        ).unwrap();
+
+        world.add_distance_constraint(
+            anchor, Vector3::zeros(),
+            link1, Vector3::zeros(),
+            0.0,
+        ).unwrap();
+        world.add_distance_constraint(
+            link1, Vector3::zeros(),
+            link2, Vector3::zeros(),
+            0.0,
+        ).unwrap();
+
+        for _ in 0..600 {
+            world.step::<4>(1.0 / 60.0);
+        }
+
+        // Verify chain lengths are approximately maintained
+        let pa = world.body(anchor).unwrap().position;
+        let p1 = world.body(link1).unwrap().position;
+        let p2 = world.body(link2).unwrap().position;
+
+        let d1 = (p1 - pa).norm();
+        let d2 = (p2 - p1).norm();
+
+        assert!((d1 - 2.0).abs() < 0.5, "Link 1 distance: {}", d1);
+        assert!((d2 - 2.0).abs() < 0.5, "Link 2 distance: {}", d2);
+
+        // Everything should hang below the anchor
+        assert!(p1.y < pa.y, "Link 1 should be below anchor");
+        assert!(p2.y < p1.y, "Link 2 should be below link 1");
+    }
+
+    #[test]
+    fn test_constraint_between_equal_bodies_symmetric() {
+        // Two equal-mass bodies connected by a distance constraint in zero gravity
+        // should move symmetrically toward each other
+        let mut world = PhysicsWorld::<4, 4>::new();
+        world.set_gravity(Vector3::zeros());
+
+        let a = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(-3.0, 0.0, 0.0))
+                .with_damping(0.0)
+                .with_angular_damping(0.0),
+        ).unwrap();
+        let b = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(3.0, 0.0, 0.0))
+                .with_damping(0.0)
+                .with_angular_damping(0.0),
+        ).unwrap();
+
+        // Distance constraint with rest_length=2 (bodies start 6 apart)
+        world.add_constraint(Constraint::Distance {
+            body_a: a,
+            body_b: b,
+            anchor_a: Vector3::zeros(),
+            anchor_b: Vector3::zeros(),
+            rest_length: 2.0,
+            compliance: 0.0,
+        }).unwrap();
+
+        for _ in 0..120 {
+            world.step::<4>(1.0 / 60.0);
+        }
+
+        let pa = world.body(a).unwrap().position;
+        let pb = world.body(b).unwrap().position;
+
+        // Center of mass should remain at origin (symmetric motion)
+        let com = (pa + pb) / 2.0;
+        assert!(com.norm() < 0.5, "COM should stay near origin, got {:?}", com);
+    }
+
+    #[test]
+    fn test_constraint_with_static_body() {
+        // Constraint between static and dynamic body — only dynamic should move
+        let mut world = PhysicsWorld::<4, 4>::new();
+        world.set_gravity(Vector3::zeros());
+
+        let fixed = world.add_body(
+            RigidBody::new_static()
+                .with_position(Vector3::new(0.0, 0.0, 0.0)),
+        ).unwrap();
+        let dynamic = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(5.0, 0.0, 0.0))
+                .with_damping(0.0)
+                .with_angular_damping(0.0),
+        ).unwrap();
+
+        // Distance constraint rest_length=2
+        world.add_constraint(Constraint::Distance {
+            body_a: fixed,
+            body_b: dynamic,
+            anchor_a: Vector3::zeros(),
+            anchor_b: Vector3::zeros(),
+            rest_length: 2.0,
+            compliance: 0.0,
+        }).unwrap();
+
+        for _ in 0..120 {
+            world.step::<4>(1.0 / 60.0);
+        }
+
+        // Static body should not move
+        let p_fixed = world.body(fixed).unwrap().position;
+        assert!(approx_vec_eq(&p_fixed, &Vector3::zeros()));
+
+        // Dynamic body should have moved toward rest_length distance
+        let p_dyn = world.body(dynamic).unwrap().position;
+        let dist = p_dyn.norm();
+        assert!((dist - 2.0).abs() < 0.5, "Expected ~2.0, got {}", dist);
+    }
+
+    #[test]
+    fn test_solver_iterations_affect_convergence() {
+        // More solver iterations should give tighter constraint enforcement
+        let make_world = |iterations: u32| -> PhysicsWorld<4, 4> {
+            let mut world = PhysicsWorld::<4, 4>::new();
+            world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+            world.solver_iterations = iterations;
+
+            let a = world.add_body(
+                RigidBody::new_static()
+                    .with_position(Vector3::new(0.0, 10.0, 0.0)),
+            ).unwrap();
+            let b = world.add_body(
+                RigidBody::new(1.0)
+                    .with_position(Vector3::new(3.0, 10.0, 0.0))
+                    .with_damping(0.0)
+                    .with_angular_damping(0.0),
+            ).unwrap();
+
+            world.add_distance_constraint(
+                a, Vector3::zeros(),
+                b, Vector3::zeros(),
+                0.0,
+            ).unwrap();
+            world
+        };
+
+        let mut world_low = make_world(1);
+        let mut world_high = make_world(16);
+
+        for _ in 0..120 {
+            world_low.step::<4>(1.0 / 60.0);
+            world_high.step::<4>(1.0 / 60.0);
+        }
+
+        let pa_low = world_low.body(BodyId(0)).unwrap().position;
+        let pb_low = world_low.body(BodyId(1)).unwrap().position;
+        let error_low = ((pb_low - pa_low).norm() - 3.0).abs();
+
+        let pa_high = world_high.body(BodyId(0)).unwrap().position;
+        let pb_high = world_high.body(BodyId(1)).unwrap().position;
+        let error_high = ((pb_high - pa_high).norm() - 3.0).abs();
+
+        // Higher iterations should give less error (or equal)
+        assert!(error_high <= error_low + EPSILON,
+            "High iterations error {} should be <= low iterations error {}", error_high, error_low);
+    }
+
+    #[test]
+    fn test_no_constraints_no_effect() {
+        // World with no constraints should behave identically
+        let mut world = PhysicsWorld::<4, 4>::new();
+        world.set_gravity(Vector3::new(0.0, -10.0, 0.0));
+
+        let id = world.add_body(
+            RigidBody::new(1.0)
+                .with_position(Vector3::new(0.0, 10.0, 0.0))
+                .with_damping(0.0),
+        ).unwrap();
+
+        world.step::<4>(1.0);
+
+        let body = world.body(id).unwrap();
+        assert!(approx_eq(body.velocity.y, -10.0));
+    }
+
+    #[test]
+    fn test_add_distance_constraint_helper() {
+        let mut world = PhysicsWorld::<4, 4>::new();
+        let a = world.add_body(
+            RigidBody::new(1.0).with_position(Vector3::new(0.0, 0.0, 0.0)),
+        ).unwrap();
+        let b = world.add_body(
+            RigidBody::new(1.0).with_position(Vector3::new(5.0, 0.0, 0.0)),
+        ).unwrap();
+
+        let cid = world.add_distance_constraint(
+            a, Vector3::zeros(),
+            b, Vector3::zeros(),
+            0.0,
+        ).unwrap();
+
+        // Rest length should be auto-computed from positions
+        if let Constraint::Distance { rest_length, .. } = world.constraint(cid).unwrap() {
+            assert!(approx_eq(*rest_length, 5.0));
+        } else {
+            panic!("Expected Distance constraint");
+        }
     }
 }

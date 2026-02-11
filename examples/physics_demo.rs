@@ -1,12 +1,11 @@
-//! Physics demo: falling cubes with angular dynamics
+//! Physics demo: falling cubes with angular dynamics and constraints
 //!
 //! Demonstrates the physics engine:
 //! - Gravity and freefall
-//! - Sphere and AABB colliders
-//! - Automatic collision detection and impulse-based response
+//! - Sphere and AABB colliders with impulse-based response
 //! - Angular dynamics: cubes spin on impact and from torque
 //! - Coulomb friction (each cube has a different friction coefficient)
-//! - Dynamic-vs-static and dynamic-vs-dynamic collisions
+//! - Constraint joints: a chain of cubes connected by distance constraints
 //! - Body deactivation via remove_body()
 //! - Syncing physics position + rotation to mesh transforms
 //!
@@ -66,67 +65,62 @@ fn make_cube() -> (Vec<[f32; 3]>, Vec<[usize; 3]>, Vec<[f32; 3]>) {
     (vertices, faces, normals)
 }
 
-const NUM_CUBES: usize = 5;
+// 3 free-falling cubes + 3 cubes in a chain = 6 total + 1 floor
+const NUM_FREE: usize = 3;
+const NUM_CHAIN: usize = 3;
+const NUM_CUBES: usize = NUM_FREE + NUM_CHAIN;
 
 fn main() {
     let mut display = SimulatorDisplay::<Rgb565>::new(Size::new(640, 480));
     let output_settings = OutputSettingsBuilder::new().scale(1).build();
     let mut window = Window::new(
-        "Physics Demo - SPACE=impulse T=torque D=deactivate R=reset ESC=exit",
+        "Physics Demo - SPACE=impulse T=torque D=deact R=reset ESC=exit",
         &output_settings,
     );
 
     // Create 3D engine
     let mut engine = K3dengine::new(640, 480);
-    engine.camera.set_position(Point3::new(0.0, 5.0, 15.0));
-    engine.camera.set_target(Point3::new(0.0, 2.0, 0.0));
+    engine.camera.set_position(Point3::new(0.0, 5.0, 18.0));
+    engine.camera.set_target(Point3::new(0.0, 3.0, 0.0));
 
     // Create cube geometry (shared by all cubes)
     let (vertices, faces, normals) = make_cube();
 
-    // Create physics world (capacity: 8 bodies)
-    let mut physics = PhysicsWorld::<8>::new();
+    // Create physics world: 16 bodies, 8 constraints
+    let mut physics = PhysicsWorld::<16, 8>::new();
     physics.set_gravity(Vector3::new(0.0, -9.81, 0.0));
+    physics.solver_iterations = 8;
 
-    // Spawn cubes at different positions with different colors
     let colors = [
         Rgb565::CSS_CYAN,
         Rgb565::CSS_ORANGE,
         Rgb565::CSS_LIME,
         Rgb565::CSS_MAGENTA,
         Rgb565::CSS_YELLOW,
+        Rgb565::CSS_SALMON,
     ];
 
-    let initial_positions: Vec<Vector3<f32>> = (0..NUM_CUBES)
-        .map(|i| {
-            Vector3::new(
-                (i as f32 - (NUM_CUBES as f32 - 1.0) / 2.0) * 2.5, // spread along X
-                5.0 + i as f32 * 2.0,                                // staggered heights
-                0.0,
-            )
-        })
+    // -- Free-falling cubes (left side) --
+    let free_positions: Vec<Vector3<f32>> = (0..NUM_FREE)
+        .map(|i| Vector3::new(-4.0, 5.0 + i as f32 * 2.5, 0.0))
         .collect();
 
-    let mut body_ids: Vec<BodyId> = Vec::new();
-    let mut meshes: Vec<K3dMesh> = Vec::new();
-
-    // Different friction per cube: from icy (0.0) to rough (1.0)
-    let frictions = [0.0, 0.2, 0.5, 0.8, 1.0];
-
-    // Give each cube a slight initial spin so they tumble as they fall
+    let frictions = [0.1, 0.5, 1.0];
     let initial_spins = [
         Vector3::new(1.0, 0.5, 0.0),
         Vector3::new(0.0, 1.0, 0.5),
         Vector3::new(0.5, 0.0, 1.0),
-        Vector3::new(-0.5, 1.0, 0.0),
-        Vector3::new(0.0, -0.5, 1.0),
     ];
 
-    for i in 0..NUM_CUBES {
-        // Physics body with box inertia (matches cube geometry)
+    let mut body_ids: Vec<BodyId> = Vec::new();
+    let mut meshes: Vec<K3dMesh> = Vec::new();
+    let mut initial_positions: Vec<Vector3<f32>> = Vec::new();
+    let mut initial_ang_vels: Vec<Vector3<f32>> = Vec::new();
+
+    for i in 0..NUM_FREE {
         let half = Vector3::new(0.5, 0.5, 0.5);
         let body = RigidBody::new(1.0)
-            .with_position(initial_positions[i])
+            .with_position(free_positions[i])
             .with_damping(0.02)
             .with_restitution(0.4)
             .with_friction(frictions[i % frictions.len()])
@@ -136,29 +130,66 @@ fn main() {
             .with_angular_damping(0.02);
         let id = physics.add_body(body).unwrap();
         body_ids.push(id);
+        initial_positions.push(free_positions[i]);
+        initial_ang_vels.push(initial_spins[i % initial_spins.len()]);
 
-        // Mesh
         let geometry = Geometry {
-            vertices: &vertices,
-            faces: &faces,
-            colors: &[],
-            lines: &[],
-            normals: &normals,
-            uvs: &[],
-            texture_id: None,
+            vertices: &vertices, faces: &faces, colors: &[], lines: &[],
+            normals: &normals, uvs: &[], texture_id: None,
         };
         let mut mesh = K3dMesh::new(geometry);
         mesh.set_render_mode(RenderMode::SolidLightDir(Vector3::new(0.5, 1.0, 0.3)));
         mesh.set_color(colors[i % colors.len()]);
-        mesh.set_position(
-            initial_positions[i].x,
-            initial_positions[i].y,
-            initial_positions[i].z,
-        );
+        mesh.set_position(free_positions[i].x, free_positions[i].y, free_positions[i].z);
         meshes.push(mesh);
     }
 
-    // Static floor — AABB collider handles collision automatically
+    // -- Hanging chain (right side): static anchor + 3 linked cubes --
+    let chain_anchor = physics.add_body(
+        RigidBody::new_static()
+            .with_position(Vector3::new(4.0, 12.0, 0.0)),
+    ).unwrap();
+
+    let chain_spacing = 2.0;
+    let mut prev_id = chain_anchor;
+    for i in 0..NUM_CHAIN {
+        let y = 12.0 - (i as f32 + 1.0) * chain_spacing;
+        let pos = Vector3::new(4.0, y, 0.0);
+        let half = Vector3::new(0.4, 0.4, 0.4);
+        let body = RigidBody::new(1.0)
+            .with_position(pos)
+            .with_damping(0.02)
+            .with_restitution(0.3)
+            .with_friction(0.5)
+            .with_collider(Collider::Sphere { radius: 0.4 })
+            .with_inertia_box(half)
+            .with_angular_damping(0.05);
+        let id = physics.add_body(body).unwrap();
+
+        // Connect to previous link with a distance constraint
+        physics.add_distance_constraint(
+            prev_id, Vector3::zeros(),
+            id, Vector3::zeros(),
+            0.0, // compliance = rigid
+        ).unwrap();
+
+        body_ids.push(id);
+        initial_positions.push(pos);
+        initial_ang_vels.push(Vector3::zeros());
+        prev_id = id;
+
+        let geometry = Geometry {
+            vertices: &vertices, faces: &faces, colors: &[], lines: &[],
+            normals: &normals, uvs: &[], texture_id: None,
+        };
+        let mut mesh = K3dMesh::new(geometry);
+        mesh.set_render_mode(RenderMode::SolidLightDir(Vector3::new(0.5, 1.0, 0.3)));
+        mesh.set_color(colors[(NUM_FREE + i) % colors.len()]);
+        mesh.set_position(pos.x, pos.y, pos.z);
+        meshes.push(mesh);
+    }
+
+    // Static floor
     let _floor_id = physics
         .add_body(
             RigidBody::new_static()
@@ -173,22 +204,15 @@ fn main() {
 
     // Floor visual mesh
     let floor_verts: Vec<[f32; 3]> = vec![
-        [-8.0, 0.0, 5.0],
-        [8.0, 0.0, 5.0],
-        [8.0, 0.0, -5.0],
-        [-8.0, 0.0, -5.0],
+        [-8.0, 0.0, 5.0], [8.0, 0.0, 5.0],
+        [8.0, 0.0, -5.0], [-8.0, 0.0, -5.0],
     ];
     let floor_faces: Vec<[usize; 3]> = vec![[0, 1, 2], [0, 2, 3]];
     let floor_normals: Vec<[f32; 3]> = vec![[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
 
     let floor_geometry = Geometry {
-        vertices: &floor_verts,
-        faces: &floor_faces,
-        colors: &[],
-        lines: &[],
-        normals: &floor_normals,
-        uvs: &[],
-        texture_id: None,
+        vertices: &floor_verts, faces: &floor_faces, colors: &[], lines: &[],
+        normals: &floor_normals, uvs: &[], texture_id: None,
     };
     let mut floor_mesh = K3dMesh::new(floor_geometry);
     floor_mesh.set_render_mode(RenderMode::SolidLightDir(Vector3::new(0.5, 1.0, 0.3)));
@@ -199,12 +223,11 @@ fn main() {
     let text_style = MonoTextStyle::new(&FONT_6X10, Rgb565::CSS_WHITE);
 
     let dt = 1.0 / 60.0;
-
-    // Simple pseudo-random torque per cube (deterministic, no rand crate)
     let mut torque_counter: u32 = 0;
 
-    println!("Physics Demo (with angular dynamics)");
-    println!("Cube friction: 0.0 (icy) -> 1.0 (rough)");
+    println!("Physics Demo (angular dynamics + constraints)");
+    println!("Left: free-falling cubes (friction 0.1/0.5/1.0)");
+    println!("Right: chain of 3 cubes connected by distance joints");
     println!("SPACE = apply upward impulse");
     println!("T = apply torque (spin cubes)");
     println!("D = deactivate first active cube");
@@ -217,13 +240,11 @@ fn main() {
     'running: loop {
         perf.start_of_frame();
 
-        // Handle events
         for event in window.events() {
             match event {
                 SimulatorEvent::KeyDown { keycode, .. } => match keycode {
                     Keycode::Escape => break 'running,
                     Keycode::Space => {
-                        // Apply upward impulse to all active cubes
                         for &id in &body_ids {
                             let body = physics.body_mut(id).unwrap();
                             if body.active {
@@ -232,7 +253,6 @@ fn main() {
                         }
                     }
                     Keycode::T => {
-                        // Apply a different torque to each cube
                         for (i, &id) in body_ids.iter().enumerate() {
                             let body = physics.body_mut(id).unwrap();
                             if body.active {
@@ -247,7 +267,6 @@ fn main() {
                         }
                     }
                     Keycode::D => {
-                        // Deactivate the first active cube
                         for &id in &body_ids {
                             if physics.body(id).unwrap().active {
                                 physics.remove_body(id);
@@ -256,14 +275,13 @@ fn main() {
                         }
                     }
                     Keycode::R => {
-                        // Reset positions, orientations, and reactivate all
                         for (i, &id) in body_ids.iter().enumerate() {
                             physics.set_active(id, true);
                             let body = physics.body_mut(id).unwrap();
                             body.position = initial_positions[i];
                             body.velocity = Vector3::zeros();
                             body.orientation = UnitQuaternion::identity();
-                            body.angular_velocity = initial_spins[i % initial_spins.len()];
+                            body.angular_velocity = initial_ang_vels[i];
                         }
                     }
                     _ => {}
@@ -273,10 +291,10 @@ fn main() {
             }
         }
 
-        // Step physics with collision detection (4 substeps, up to 16 contacts)
+        // Step physics (4 substeps, up to 16 contacts)
         physics.step_fixed::<16>(dt, 4);
 
-        // Sync physics -> meshes (position + rotation; hide inactive off-screen)
+        // Sync physics -> meshes
         for (i, &id) in body_ids.iter().enumerate() {
             let body = physics.body(id).unwrap();
             if body.active {
