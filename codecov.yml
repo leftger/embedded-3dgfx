@@ -1,20 +1,14 @@
+# Score only the core embedded-3dgfx library (src/). Helper crates (asset_cli,
+# load_stl, size_harness) and non-library trees are excluded from Codecov.
 ignore:
   - "asset_cli/**"
-  - "**/asset_cli/**"
   - "load_stl/**"
-  - "**/load_stl/**"
   - "size_harness/**"
-  - "**/size_harness/**"
   - "tools/**"
-  - "**/tools/**"
   - "benches/**"
-  - "**/benches/**"
   - "examples/**"
-  - "**/examples/**"
   - "assets/**"
-  - "**/assets/**"
   - "docs/**"
-  - "**/docs/**"
 
 coverage:
   status:
@@ -22,7 +16,11 @@ coverage:
       default:
         target: auto
         threshold: 1%
+        paths:
+          - src
     patch:
       default:
         target: 60%
         threshold: 1%
+        paths:
+          - src
