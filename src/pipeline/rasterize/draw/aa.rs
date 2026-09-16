@@ -1,4 +1,8 @@
-//! Anti-aliasing algorithms (2xSSAA, Heuristic edge-AA, and Coverage-AA).
+//! Anti-aliasing algorithms.
+//!
+//! * `draw_zbuffered_2xssaa` - always available under the `aa` feature
+//! * `draw_zbuffered_aa` - heuristic edge AA, under `aa-heuristic`
+//! * `draw_zbuffered_aa_coverage` - coverage-buffer edge AA, under `aa-coverage`
 
 extern crate alloc;
 
@@ -23,6 +27,7 @@ pub(crate) fn aa_pixel<T: ReadPixel>(fb: &T, point: Point, draw_color: Rgb565, c
 
 /// Render primitives with Z-buffering and basic anti-aliasing.
 #[inline]
+#[cfg(feature = "aa-heuristic")]
 pub fn draw_zbuffered_aa<T: ReadPixel + DrawTarget<Color = Rgb565>>(
     primitive: crate::pipeline::assemble::primitive::DrawPrimitive,
     fb: &mut T,
@@ -172,6 +177,7 @@ pub fn draw_zbuffered_2xssaa<D: DrawTarget<Color = Rgb565>>(
 }
 
 /// Render primitives with Z-buffering and Coverage-Based Anti-Aliasing (AA-Coverage).
+#[cfg(feature = "aa-coverage")]
 pub fn draw_zbuffered_aa_coverage<D: DrawTarget<Color = Rgb565>>(
     primitive: crate::pipeline::assemble::primitive::DrawPrimitive,
     fb: &mut D,
@@ -204,6 +210,7 @@ pub fn draw_zbuffered_aa_coverage<D: DrawTarget<Color = Rgb565>>(
     }
 }
 
+#[cfg(feature = "aa-coverage")]
 pub(crate) fn draw_line_aa_coverage(
     p1: nalgebra::Point2<i32>,
     p2: nalgebra::Point2<i32>,
@@ -247,6 +254,7 @@ pub(crate) fn draw_line_aa_coverage(
     }
 }
 
+#[cfg(feature = "aa-coverage")]
 pub(crate) fn composite_aa_background<D: DrawTarget<Color = Rgb565>>(
     fb: &mut D,
     coverage_buffer: &[u8],
@@ -434,6 +442,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "aa-coverage")]
     fn test_draw_zbuffered_aa_coverage() {
         let mut fb = TestAaFb::<20, 20>::default();
         let mut zbuffer = [crate::Z_MAX_VALUE; 400];
