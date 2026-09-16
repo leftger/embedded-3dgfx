@@ -1,7 +1,5 @@
 //! Procedural sky background drawn before world geometry.
 
-//! Command execution: rasterize a recorded command buffer into a framebuffer.
-
 use core::fmt::Debug;
 
 use embedded_graphics_core::{

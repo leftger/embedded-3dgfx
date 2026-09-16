@@ -1,7 +1,5 @@
 //! Dirty-region bounds: primitive extents clamped to the frame.
 
-//! Command execution: rasterize a recorded command buffer into a framebuffer.
-
 use crate::pipeline::assemble::primitive::DrawPrimitive;
 
 #[inline(always)]

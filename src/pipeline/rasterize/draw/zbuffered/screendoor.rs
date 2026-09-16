@@ -1,7 +1,5 @@
 //! Screen-door (stipple / checkerboard) transparency fills.
 
-//! Standard Z-buffered triangle rasterization, Gouraud shading, and translucent triangles.
-
 use core::fmt::Debug;
 use embedded_graphics_core::draw_target::DrawTarget;
 use embedded_graphics_core::pixelcolor::Rgb565;

@@ -1,7 +1,5 @@
 //! Coverage-driven textured draw, used by the BSP renderers.
 
-//! Textured, lightmapped, and BSP coverage triangle rasterization.
-
 use core::fmt::Debug;
 use embedded_graphics_core::draw_target::DrawTarget;
 use embedded_graphics_core::pixelcolor::Rgb565;

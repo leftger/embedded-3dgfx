@@ -1,7 +1,5 @@
 //! Per-pixel post-processing applied on the way to the framebuffer.
 
-//! Command execution: rasterize a recorded command buffer into a framebuffer.
-
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 
 use crate::{

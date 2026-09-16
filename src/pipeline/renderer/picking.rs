@@ -1,7 +1,5 @@
 //! Ray/primitive picking executed over a command buffer.
 
-//! Command execution: rasterize a recorded command buffer into a framebuffer.
-
 use core::fmt::Debug;
 
 use embedded_graphics_core::{Pixel, draw_target::DrawTarget, pixelcolor::Rgb565, prelude::Point};

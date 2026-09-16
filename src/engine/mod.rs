@@ -228,14 +228,14 @@ impl K3dengine {
     #[allow(dead_code)]
     #[inline]
     pub(crate) fn light_tint_at(&self, world_pos: Point3<f32>) -> Rgb565 {
-        immediate::light_tint_at(self, world_pos)
+        immediate::shading::light_tint_at(self, world_pos)
     }
 
     #[cfg(feature = "lighting")]
     #[allow(dead_code)]
     #[inline]
     pub(crate) fn add_tint(base: Rgb565, tint: Rgb565) -> Rgb565 {
-        immediate::add_tint(base, tint)
+        immediate::shading::add_tint(base, tint)
     }
 
     #[cfg(feature = "lighting")]
@@ -247,7 +247,7 @@ impl K3dengine {
         brightness: u8,
         face_center: Point3<f32>,
     ) -> Rgb565 {
-        immediate::sector_shaded_color(self, base, brightness, face_center)
+        immediate::shading::sector_shaded_color(self, base, brightness, face_center)
     }
 
     #[cfg(feature = "lighting")]
@@ -258,7 +258,7 @@ impl K3dengine {
         vertices: &[[f32; 3]],
         model_matrix: Matrix4<f32>,
     ) -> Point3<f32> {
-        immediate::face_world_center(face, vertices, model_matrix)
+        immediate::geometry::face_world_center(face, vertices, model_matrix)
     }
 
     pub fn set_caps(&mut self, caps: crate::config::ProfileCaps) {

@@ -1,7 +1,5 @@
 //! Gouraud-shaded Z-buffered triangles (per-vertex colour interpolation).
 
-//! Standard Z-buffered triangle rasterization, Gouraud shading, and translucent triangles.
-
 use core::fmt::Debug;
 use embedded_graphics_core::draw_target::DrawTarget;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};

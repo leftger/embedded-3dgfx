@@ -1,10 +1,4 @@
 //! The execute half of the record/execute split.
-//!
-//! Each entry point corresponds to one dispatch strategy and takes the pass
-//! configuration as a single [`RasterState`](crate::pipeline::rasterize::draw::state::RasterState).
-
-//! Command execution: rasterize a recorded command buffer into a framebuffer.
-
 use core::fmt::Debug;
 
 use embedded_graphics_core::{
