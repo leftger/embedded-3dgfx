@@ -762,7 +762,7 @@
 <a href=#762 id=762 data-nosnippet>762</a>
 <a href=#763 id=763 data-nosnippet>763</a>        <span class="kw">let </span><span class="kw-2">mut </span>cloth = cloth.unwrap();
 <a href=#764 id=764 data-nosnippet>764</a>        <span class="macro">assert_eq!</span>(cloth.particles.len(), <span class="number">16</span>); <span class="comment">// 4x4 grid
-<a href=#765 id=765 data-nosnippet>765</a>        </span><span class="macro">assert!</span>(cloth.springs.len() &gt; <span class="number">0</span>); <span class="comment">// Should have multiple springs
+<a href=#765 id=765 data-nosnippet>765</a>        </span><span class="macro">assert!</span>(!cloth.springs.is_empty()); <span class="comment">// Should have multiple springs
 <a href=#766 id=766 data-nosnippet>766</a>
 <a href=#767 id=767 data-nosnippet>767</a>        // Step simulation
 <a href=#768 id=768 data-nosnippet>768</a>        </span>cloth.step(<span class="number">0.016</span>);
@@ -778,7 +778,7 @@
 <a href=#778 id=778 data-nosnippet>778</a>
 <a href=#779 id=779 data-nosnippet>779</a>        <span class="kw">let </span><span class="kw-2">mut </span>cube = cube.unwrap();
 <a href=#780 id=780 data-nosnippet>780</a>        <span class="macro">assert_eq!</span>(cube.particles.len(), <span class="number">8</span>);
-<a href=#781 id=781 data-nosnippet>781</a>        <span class="macro">assert!</span>(cube.springs.len() &gt; <span class="number">0</span>);
+<a href=#781 id=781 data-nosnippet>781</a>        <span class="macro">assert!</span>(!cube.springs.is_empty());
 <a href=#782 id=782 data-nosnippet>782</a>
 <a href=#783 id=783 data-nosnippet>783</a>        cube.apply_global_force(Vector3::new(<span class="number">0.0</span>, <span class="number">10.0</span>, <span class="number">0.0</span>));
 <a href=#784 id=784 data-nosnippet>784</a>        cube.step(<span class="number">0.016</span>);
@@ -792,7 +792,7 @@
 <a href=#792 id=792 data-nosnippet>792</a>
 <a href=#793 id=793 data-nosnippet>793</a>        <span class="kw">let </span><span class="kw-2">mut </span>sphere = sphere.unwrap();
 <a href=#794 id=794 data-nosnippet>794</a>        <span class="macro">assert_eq!</span>(sphere.particles.len(), <span class="number">12</span>);
-<a href=#795 id=795 data-nosnippet>795</a>        <span class="macro">assert!</span>(sphere.springs.len() &gt; <span class="number">0</span>);
+<a href=#795 id=795 data-nosnippet>795</a>        <span class="macro">assert!</span>(!sphere.springs.is_empty());
 <a href=#796 id=796 data-nosnippet>796</a>
 <a href=#797 id=797 data-nosnippet>797</a>        sphere.set_gravity(Vector3::new(<span class="number">0.0</span>, -<span class="number">1.0</span>, <span class="number">0.0</span>));
 <a href=#798 id=798 data-nosnippet>798</a>        sphere.step(<span class="number">0.016</span>);
