@@ -16,7 +16,6 @@ use crate::pipeline::shade::retro::stipple::StippleMode;
 use crate::pipeline::shade::retro::texture_lod::TextureMapping;
 use crate::pipeline::shade::retro::tint::ScreenTint;
 
-#[cfg(feature = "textured")]
 pub fn fill_triangle_zbuffered_textured_gouraud<D: DrawTarget<Color = Rgb565>>(
     p1: nalgebra::Point2<i32>,
     p2: nalgebra::Point2<i32>,
@@ -181,7 +180,6 @@ pub fn fill_triangle_zbuffered_textured_gouraud<D: DrawTarget<Color = Rgb565>>(
     }
 }
 
-#[cfg(feature = "textured")]
 fn fill_bottom_flat_triangle_zbuffered_textured_gouraud<D: DrawTarget<Color = Rgb565>>(
     p1: Point,
     p2: Point,
@@ -281,7 +279,6 @@ fn fill_bottom_flat_triangle_zbuffered_textured_gouraud<D: DrawTarget<Color = Rg
     }
 }
 
-#[cfg(feature = "textured")]
 fn fill_top_flat_triangle_zbuffered_textured_gouraud<D: DrawTarget<Color = Rgb565>>(
     p1: Point,
     p2: Point,
@@ -381,7 +378,6 @@ fn fill_top_flat_triangle_zbuffered_textured_gouraud<D: DrawTarget<Color = Rgb56
     }
 }
 
-#[cfg(feature = "textured")]
 fn draw_scanline_zbuffered_textured_gouraud<D: DrawTarget<Color = Rgb565>>(
     x1: i32,
     x2: i32,

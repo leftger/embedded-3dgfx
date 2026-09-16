@@ -8,10 +8,8 @@ use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_core::prelude::Point;
 
 use crate::pipeline::effects::{DitherConfig, FogConfig};
-#[cfg(feature = "lighting")]
 use crate::pipeline::rasterize::draw::fill::interpolate_color;
 
-#[cfg(feature = "lighting")]
 #[inline]
 pub(crate) fn fill_triangle_zbuffered_gouraud<D: DrawTarget<Color = Rgb565>>(
     p1: nalgebra::Point2<i32>,
@@ -117,7 +115,6 @@ pub(crate) fn fill_triangle_zbuffered_gouraud<D: DrawTarget<Color = Rgb565>>(
     }
 }
 
-#[cfg(feature = "lighting")]
 #[inline(always)]
 pub(super) fn fill_bottom_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = Rgb565>>(
     p1: Point,
@@ -186,7 +183,6 @@ pub(super) fn fill_bottom_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = 
     }
 }
 
-#[cfg(feature = "lighting")]
 #[inline(always)]
 pub(super) fn fill_top_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = Rgb565>>(
     p1: Point,
@@ -255,7 +251,6 @@ pub(super) fn fill_top_flat_triangle_zbuffered_gouraud<D: DrawTarget<Color = Rgb
     }
 }
 
-#[cfg(feature = "lighting")]
 #[inline(always)]
 pub(super) fn draw_scanline_zbuffered_gouraud<D: DrawTarget<Color = Rgb565>>(
     x1: i32,

@@ -1,15 +1,10 @@
 //! Q16.16 fixed-point triangle rasterization (fixed-raster).
 
-#[cfg(feature = "fixed-raster")]
 use core::fmt::Debug;
-#[cfg(feature = "fixed-raster")]
 use embedded_graphics_core::draw_target::DrawTarget;
-#[cfg(feature = "fixed-raster")]
 use embedded_graphics_core::pixelcolor::Rgb565;
-#[cfg(feature = "fixed-raster")]
 use embedded_graphics_core::prelude::Point;
 
-#[cfg(feature = "fixed-raster")]
 pub fn fill_triangle_fixed<D: DrawTarget<Color = Rgb565>>(
     mut p1: Point,
     mut p2: Point,
@@ -96,7 +91,6 @@ pub fn fill_triangle_fixed<D: DrawTarget<Color = Rgb565>>(
     }
 }
 
-#[cfg(feature = "fixed-raster")]
 pub fn fill_triangle_zbuffered_fixed<D: DrawTarget<Color = Rgb565>>(
     mut p1: Point,
     mut p2: Point,

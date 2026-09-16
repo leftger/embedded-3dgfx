@@ -10,10 +10,8 @@ use embedded_graphics_core::prelude::Point;
 use micromath::F32Ext;
 
 use super::blend::blend_q8;
-#[cfg(feature = "aa")]
 use crate::pipeline::rasterize::raster::aa::ReadPixel;
 
-#[cfg(feature = "aa")]
 #[inline]
 pub(crate) fn aa_pixel<T: ReadPixel>(fb: &T, point: Point, draw_color: Rgb565, coverage: u8) {
     if coverage == 255 {
@@ -24,7 +22,6 @@ pub(crate) fn aa_pixel<T: ReadPixel>(fb: &T, point: Point, draw_color: Rgb565, c
 }
 
 /// Render primitives with Z-buffering and basic anti-aliasing.
-#[cfg(feature = "aa")]
 #[inline]
 pub fn draw_zbuffered_aa<T: ReadPixel + DrawTarget<Color = Rgb565>>(
     primitive: crate::pipeline::assemble::primitive::DrawPrimitive,
@@ -79,7 +76,6 @@ impl embedded_graphics_core::geometry::OriginDimensions for SuperFramebuffer {
 }
 
 /// Render primitives with 2x Super-Sample Anti-Aliasing (2xSSAA).
-#[cfg(feature = "aa")]
 pub fn draw_zbuffered_2xssaa<D: DrawTarget<Color = Rgb565>>(
     primitive: crate::pipeline::assemble::primitive::DrawPrimitive,
     fb: &mut D,
@@ -176,7 +172,6 @@ pub fn draw_zbuffered_2xssaa<D: DrawTarget<Color = Rgb565>>(
 }
 
 /// Render primitives with Z-buffering and Coverage-Based Anti-Aliasing (AA-Coverage).
-#[cfg(feature = "aa")]
 pub fn draw_zbuffered_aa_coverage<D: DrawTarget<Color = Rgb565>>(
     primitive: crate::pipeline::assemble::primitive::DrawPrimitive,
     fb: &mut D,
@@ -209,7 +204,6 @@ pub fn draw_zbuffered_aa_coverage<D: DrawTarget<Color = Rgb565>>(
     }
 }
 
-#[cfg(feature = "aa")]
 pub(crate) fn draw_line_aa_coverage(
     p1: nalgebra::Point2<i32>,
     p2: nalgebra::Point2<i32>,
@@ -253,7 +247,6 @@ pub(crate) fn draw_line_aa_coverage(
     }
 }
 
-#[cfg(feature = "aa")]
 pub(crate) fn composite_aa_background<D: DrawTarget<Color = Rgb565>>(
     fb: &mut D,
     coverage_buffer: &[u8],
@@ -279,7 +272,6 @@ pub(crate) fn composite_aa_background<D: DrawTarget<Color = Rgb565>>(
     }
 }
 
-#[cfg(feature = "aa")]
 pub fn draw_line_aa<T: ReadPixel + DrawTarget<Color = Rgb565>>(
     p1: nalgebra::Point2<i32>,
     p2: nalgebra::Point2<i32>,

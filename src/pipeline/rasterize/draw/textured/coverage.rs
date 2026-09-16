@@ -13,7 +13,6 @@ use crate::pipeline::shade::retro::stipple::StippleMode;
 use crate::pipeline::shade::retro::texture_lod::TextureMapping;
 use crate::pipeline::shade::retro::tint::ScreenTint;
 
-#[cfg(feature = "raycast")]
 pub fn draw_bsp_coverage<D: DrawTarget<Color = Rgb565>, const N: usize>(
     mut points: [nalgebra::Point2<i32>; 3],
     mut ws: [f32; 3],

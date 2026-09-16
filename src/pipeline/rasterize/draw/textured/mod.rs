@@ -152,7 +152,6 @@ pub fn draw_zbuffered_with_textures_state<D: DrawTarget<Color = Rgb565>, const N
                 state.palette_mode,
             );
         }
-        #[cfg(feature = "textured")]
         DrawPrimitive::TexturedGouraudTriangleWithDepth {
             mut points,
             mut depths,
