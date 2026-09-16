@@ -122,6 +122,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 .github/scripts/check_no_alloc_frame_path.py
 
+  import-policy:
+    name: Import Policy Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 .github/scripts/check_internal_imports.py
+
   test:
     name: Test
     runs-on: ubuntu-latest
