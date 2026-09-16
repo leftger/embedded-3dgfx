@@ -461,7 +461,7 @@ impl K3dengine {
         visible_meshes: &mut usize,
         used_texture_ids: &mut heapless::Vec<u32, 64>,
     ) -> Result<(), RenderError> {
-        recording::record_one_mesh(
+        recording::mesh::record_one_mesh(
             self,
             mesh,
             commands,
@@ -482,7 +482,7 @@ impl K3dengine {
         MS: IntoIterator<Item = &'a K3dMesh<'a>>,
         FS: IntoIterator<Item = &'a K3dMesh<'a>>,
     {
-        recording::record_with_fallback(self, primary, fallback, commands, telemetry)
+        recording::degrade::record_with_fallback(self, primary, fallback, commands, telemetry)
     }
 
     pub fn record_with_degradation<'a, const MAX: usize>(
@@ -492,7 +492,7 @@ impl K3dengine {
         policy: crate::config::DegradationPolicy<'_>,
         telemetry: Option<&mut crate::telemetry::RecordTelemetry>,
     ) -> Result<DegradationOutcome, RenderError> {
-        recording::record_with_degradation(self, meshes, commands, policy, telemetry)
+        recording::degrade::record_with_degradation(self, meshes, commands, policy, telemetry)
     }
 
     pub fn execute<D, const MAX: usize>(
@@ -506,7 +506,7 @@ impl K3dengine {
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        recording::execute(self, fb, frame, commands, telemetry)
+        recording::execute::execute(self, fb, frame, commands, telemetry)
     }
 
     #[cfg(feature = "textured")]
@@ -522,7 +522,14 @@ impl K3dengine {
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        recording::execute_with_textures(self, fb, frame, commands, texture_manager, telemetry)
+        recording::execute::execute_with_textures(
+            self,
+            fb,
+            frame,
+            commands,
+            texture_manager,
+            telemetry,
+        )
     }
 
     pub fn execute_tiled<D, const MAX: usize, const BIN_CAP: usize>(
@@ -536,7 +543,7 @@ impl K3dengine {
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        recording::execute_tiled::<D, MAX, BIN_CAP>(self, fb, frame, commands, tile)
+        recording::execute::execute_tiled::<D, MAX, BIN_CAP>(self, fb, frame, commands, tile)
     }
 
     #[cfg(feature = "gizmos")]
@@ -547,7 +554,7 @@ impl K3dengine {
         color: Rgb565,
         commands: &mut CommandBuffer<MAX>,
     ) -> Result<(), RenderError> {
-        recording::record_aabb_gizmo(self, aabb, model_matrix, color, commands)
+        recording::gizmos::record_aabb_gizmo(self, aabb, model_matrix, color, commands)
     }
 
     #[cfg(feature = "gizmos")]
@@ -556,6 +563,6 @@ impl K3dengine {
         color: Rgb565,
         commands: &mut CommandBuffer<MAX>,
     ) -> Result<(), RenderError> {
-        recording::record_frustum_gizmo(self, color, commands)
+        recording::gizmos::record_frustum_gizmo(self, color, commands)
     }
 }
