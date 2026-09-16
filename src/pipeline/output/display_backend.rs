@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_cpu_accelerator_and_region_helpers() {
-        let mut accel = CpuAccelerator::default();
+        let mut accel = CpuAccelerator;
         assert!(!accel.fill_rect(0, 0, 1, 1, Rgb565::BLACK));
         assert!(!accel.blit(&[], 0, 0, 0, 0, 0));
         let region = DisplayRegion::new(1, 2, 3, 4);

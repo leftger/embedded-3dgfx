@@ -251,6 +251,9 @@ mod tests {
 
     use super::*;
 
+    // 3.14 rather than PI on purpose: a yaw of exactly PI is antipodal, which
+    // makes the shortest-arc interpolation degenerate.
+    #[allow(clippy::approx_constant)]
     const TRACK: &[TransformKeyframe] = &[
         TransformKeyframe::new(0.0, [0.0, -2.0, 0.0], 0.0, 0.0, 0.0, 1.0),
         TransformKeyframe::new(1.0, [0.0, 0.0, 0.0], 0.0, 0.0, 3.14, 1.0),

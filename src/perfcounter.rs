@@ -291,7 +291,7 @@ mod tests {
 
         // FPS should be less than 100 (since we slept for 10ms)
         // Just verify the text is generated correctly
-        assert!(text.len() > 0);
+        assert!(!text.is_empty());
     }
 
     #[test]

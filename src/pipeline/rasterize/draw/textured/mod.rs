@@ -695,6 +695,13 @@ pub(crate) fn draw_scanline_zbuffered_textured<D: DrawTarget<Color = Rgb565>>(
     }
 }
 
+// Curated surface: `draw::textured::X` keeps resolving for the items that moved
+// into a concern submodule, so callers do not have to know how the module is
+// carved up internally.
+#[cfg(feature = "raycast")]
+pub use coverage::draw_bsp_coverage;
+pub use lightmap::{draw_zbuffered_lightmapped, draw_zbuffered_lightmapped_mapped};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -887,10 +894,3 @@ mod tests {
         assert!(fb.pixels[center_idx].r() > 0);
     }
 }
-
-// Curated surface: `draw::textured::X` keeps resolving for the items that moved
-// into a concern submodule, so callers do not have to know how the module is
-// carved up internally.
-#[cfg(feature = "raycast")]
-pub use coverage::draw_bsp_coverage;
-pub use lightmap::{draw_zbuffered_lightmapped, draw_zbuffered_lightmapped_mapped};

@@ -762,7 +762,7 @@ mod tests {
 
         let mut cloth = cloth.unwrap();
         assert_eq!(cloth.particles.len(), 16); // 4x4 grid
-        assert!(cloth.springs.len() > 0); // Should have multiple springs
+        assert!(!cloth.springs.is_empty()); // Should have multiple springs
 
         // Step simulation
         cloth.step(0.016);
@@ -778,7 +778,7 @@ mod tests {
 
         let mut cube = cube.unwrap();
         assert_eq!(cube.particles.len(), 8);
-        assert!(cube.springs.len() > 0);
+        assert!(!cube.springs.is_empty());
 
         cube.apply_global_force(Vector3::new(0.0, 10.0, 0.0));
         cube.step(0.016);
@@ -792,7 +792,7 @@ mod tests {
 
         let mut sphere = sphere.unwrap();
         assert_eq!(sphere.particles.len(), 12);
-        assert!(sphere.springs.len() > 0);
+        assert!(!sphere.springs.is_empty());
 
         sphere.set_gravity(Vector3::new(0.0, -1.0, 0.0));
         sphere.step(0.016);
