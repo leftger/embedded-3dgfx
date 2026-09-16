@@ -13,11 +13,11 @@ at capacity (<code>N</code> particles already live).</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.record" class="method"><a class="src rightside" href="../../src/embedded_3dgfx/particles.rs.html#227-280">Source</a><h4 class="code-header">pub fn <a href="#method.record" class="fn">record</a>&lt;const MAX: <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.usize.html">usize</a>&gt;(
     &amp;self,
     engine: &amp;<a class="struct" href="../engine/struct.K3dengine.html" title="struct embedded_3dgfx::engine::K3dengine">K3dengine</a>,
-    commands: &amp;mut <a class="struct" href="../command_buffer/struct.CommandBuffer.html" title="struct embedded_3dgfx::command_buffer::CommandBuffer">CommandBuffer</a>&lt;MAX&gt;,
+    commands: &amp;mut <a class="struct" href="../pipeline/command_buffer/struct.CommandBuffer.html" title="struct embedded_3dgfx::pipeline::command_buffer::CommandBuffer">CommandBuffer</a>&lt;MAX&gt;,
 ) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Record all live particles as camera-facing billboard quads into
 <code>commands</code>.</p>
 <p>Each particle emits two
-<a href="../primitive/enum.DrawPrimitive.html#variant.ColoredTriangleWithDepth" title="variant embedded_3dgfx::primitive::DrawPrimitive::ColoredTriangleWithDepth"><code>DrawPrimitive::ColoredTriangleWithDepth</code></a>
+<a href="../pipeline/assemble/primitive/enum.DrawPrimitive.html#variant.ColoredTriangleWithDepth" title="variant embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive::ColoredTriangleWithDepth"><code>DrawPrimitive::ColoredTriangleWithDepth</code></a>
 commands.  Billboard orientation uses world-up <code>(0, 1, 0)</code>, which is
 correct for all but extreme pitch angles.</p>
 <p>Returns the number of particles successfully projected and emitted.
@@ -26,7 +26,7 @@ silently skipped.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.record_with_gradient" class="method"><a class="src rightside" href="../../src/embedded_3dgfx/particles.rs.html#284-348">Source</a><h4 class="code-header">pub fn <a href="#method.record_with_gradient" class="fn">record_with_gradient</a>&lt;const MAX: <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.usize.html">usize</a>&gt;(
     &amp;self,
     engine: &amp;<a class="struct" href="../engine/struct.K3dengine.html" title="struct embedded_3dgfx::engine::K3dengine">K3dengine</a>,
-    commands: &amp;mut <a class="struct" href="../command_buffer/struct.CommandBuffer.html" title="struct embedded_3dgfx::command_buffer::CommandBuffer">CommandBuffer</a>&lt;MAX&gt;,
+    commands: &amp;mut <a class="struct" href="../pipeline/command_buffer/struct.CommandBuffer.html" title="struct embedded_3dgfx::pipeline::command_buffer::CommandBuffer">CommandBuffer</a>&lt;MAX&gt;,
     gradient: <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="../color_gradient/struct.ColorGradient.html" title="struct embedded_3dgfx::color_gradient::ColorGradient">ColorGradient</a>&lt;'_, Rgb565&gt;&gt;,
     size_curve: <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="../curve/struct.Curve.html" title="struct embedded_3dgfx::curve::Curve">Curve</a>&lt;'_, <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.f32.html">f32</a>&gt;&gt;,
 ) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Record all live particles with an optional <a href="../color_gradient/struct.ColorGradient.html" title="struct embedded_3dgfx::color_gradient::ColorGradient"><code>ColorGradient</code></a>

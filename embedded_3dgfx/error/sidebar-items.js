@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["BackendFaultKind","BudgetKind","RecoveryAction","RenderError","RuntimeFaultKind","StallKind"]};
+window.SIDEBAR_ITEMS = {"enum":["BackendFaultKind","BudgetKind","DisplayError","RecoveryAction","RenderError","RuntimeFaultKind","StallKind"]};

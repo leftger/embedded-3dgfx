@@ -1791,7 +1791,7 @@
 <a href=#1791 id=1791 data-nosnippet>1791</a>}
 <a href=#1792 id=1792 data-nosnippet>1792</a>
 <a href=#1793 id=1793 data-nosnippet>1793</a><span class="doccomment">/// Helper to sync a [`RigidBody`]'s position and orientation back to a
-<a href=#1794 id=1794 data-nosnippet>1794</a>/// [`K3dMesh`](crate::mesh::K3dMesh).
+<a href=#1794 id=1794 data-nosnippet>1794</a>/// [`K3dMesh`](crate::pipeline::vertex::mesh::K3dMesh).
 <a href=#1795 id=1795 data-nosnippet>1795</a>///
 <a href=#1796 id=1796 data-nosnippet>1796</a>/// Call this after `PhysicsWorld::step()` to update mesh transforms.
 <a href=#1797 id=1797 data-nosnippet>1797</a>///
@@ -1802,7 +1802,7 @@
 <a href=#1802 id=1802 data-nosnippet>1802</a>///     sync_body_to_mesh(body, &amp;mut meshes[id]);
 <a href=#1803 id=1803 data-nosnippet>1803</a>/// }
 <a href=#1804 id=1804 data-nosnippet>1804</a>/// ```
-<a href=#1805 id=1805 data-nosnippet>1805</a></span><span class="kw">pub fn </span>sync_body_to_mesh(body: <span class="kw-2">&amp;</span>RigidBody, mesh: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::mesh::K3dMesh&lt;<span class="lifetime">'_</span>&gt;) {
+<a href=#1805 id=1805 data-nosnippet>1805</a></span><span class="kw">pub fn </span>sync_body_to_mesh(body: <span class="kw-2">&amp;</span>RigidBody, mesh: <span class="kw-2">&amp;mut </span><span class="kw">crate</span>::pipeline::vertex::mesh::K3dMesh&lt;<span class="lifetime">'_</span>&gt;) {
 <a href=#1806 id=1806 data-nosnippet>1806</a>    mesh.set_position(body.position.x, body.position.y, body.position.z);
 <a href=#1807 id=1807 data-nosnippet>1807</a>    mesh.set_rotation(body.orientation);
 <a href=#1808 id=1808 data-nosnippet>1808</a>}

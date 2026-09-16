@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["light_levels","palette","sky","stipple","style","texture_lod","tint"]};

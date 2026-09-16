@@ -7,10 +7,10 @@
     D: Drawable&lt;Color = Rgb565&gt;,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Rasterize a <a href="Drawable"><code>Drawable&lt;Color = Rgb565&gt;</code></a> into a caller-supplied
 pixel buffer, ready to be used as a 3D texture.</p>
 <p><code>width</code> and <code>height</code> must be powers of two (required by
-<a href="../texture/struct.Texture.html#method.new" title="associated function embedded_3dgfx::texture::Texture::new"><code>Texture::new</code></a>), and <code>buffer.len()</code> must
+<a href="../pipeline/rasterize/texture/struct.Texture.html#method.new" title="associated function embedded_3dgfx::pipeline::rasterize::texture::Texture::new"><code>Texture::new</code></a>), and <code>buffer.len()</code> must
 equal <code>width * height</code>.</p>
 <h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
-<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>embedded_3dgfx::{bridge::render_drawable_to_buffer, texture::Texture};
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>embedded_3dgfx::{bridge::render_drawable_to_buffer, pipeline::rasterize::texture::Texture};
 <span class="kw">use </span>embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 
 <span class="kw">static </span><span class="kw-2">mut </span>BUF: [Rgb565; <span class="number">32 </span>* <span class="number">32</span>] = [Rgb565::BLACK; <span class="number">32 </span>* <span class="number">32</span>];

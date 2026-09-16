@@ -3,9 +3,9 @@
 <a href=#3 id=3 data-nosnippet>3</a>//! Intended for `std` / simulator builds when tuning culling. All helpers are
 <a href=#4 id=4 data-nosnippet>4</a>//! `no_std`-safe and write into a caller-provided callback or command buffer.
 <a href=#5 id=5 data-nosnippet>5</a>
-<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span><span class="kw">crate</span>::bounds::Aabb;
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span><span class="kw">crate</span>::camera::Camera;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">crate</span>::primitive::DrawPrimitive;
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span><span class="kw">crate</span>::pipeline::assemble::primitive::DrawPrimitive;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span><span class="kw">crate</span>::pipeline::vertex::bounds::Aabb;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">crate</span>::pipeline::vertex::camera::Camera;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>embedded_graphics_core::pixelcolor::Rgb565;
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>nalgebra::{Matrix4, Point2, Point3, Vector3};
 <a href=#11 id=11 data-nosnippet>11</a>

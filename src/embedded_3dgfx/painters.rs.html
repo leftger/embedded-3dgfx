@@ -16,8 +16,8 @@
 <a href=#16 id=16 data-nosnippet>16</a>//! Note: callers supply a fixed triangle scratch buffer; no heap allocation is required.
 <a href=#17 id=17 data-nosnippet>17</a>
 <a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">use </span><span class="kw">crate</span>::engine::K3dengine;
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span><span class="kw">crate</span>::mesh::{K3dMesh, RenderMode};
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span><span class="kw">crate</span>::primitive::DrawPrimitive;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span><span class="kw">crate</span>::pipeline::assemble::primitive::DrawPrimitive;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span><span class="kw">crate</span>::pipeline::vertex::mesh::{K3dMesh, RenderMode};
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>core::cmp::Ordering;
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>nalgebra::{Vector3, Vector4};
@@ -375,7 +375,7 @@
 <a href=#375 id=375 data-nosnippet>375</a>            [<span class="number">20.0f32</span>, <span class="number">2.0</span>, <span class="number">0.0</span>], <span class="comment">// intentionally far outside horizontal frustum
 <a href=#376 id=376 data-nosnippet>376</a>        </span>];
 <a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">let </span>faces = [[<span class="number">0usize</span>, <span class="number">1usize</span>, <span class="number">2usize</span>]];
-<a href=#378 id=378 data-nosnippet>378</a>        <span class="kw">let </span>geometry = <span class="kw">crate</span>::mesh::Geometry {
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="kw">let </span>geometry = <span class="kw">crate</span>::pipeline::vertex::mesh::Geometry {
 <a href=#379 id=379 data-nosnippet>379</a>            vertices: <span class="kw-2">&amp;</span>vertices,
 <a href=#380 id=380 data-nosnippet>380</a>            faces: <span class="kw-2">&amp;</span>faces,
 <a href=#381 id=381 data-nosnippet>381</a>            colors: <span class="kw-2">&amp;</span>[],
@@ -385,8 +385,8 @@
 <a href=#385 id=385 data-nosnippet>385</a>            uvs: <span class="kw-2">&amp;</span>[],
 <a href=#386 id=386 data-nosnippet>386</a>            texture_id: <span class="prelude-val">None</span>,
 <a href=#387 id=387 data-nosnippet>387</a>        };
-<a href=#388 id=388 data-nosnippet>388</a>        <span class="kw">let </span><span class="kw-2">mut </span>mesh = <span class="kw">crate</span>::mesh::K3dMesh::new(geometry);
-<a href=#389 id=389 data-nosnippet>389</a>        mesh.set_render_mode(<span class="kw">crate</span>::mesh::RenderMode::Solid);
+<a href=#388 id=388 data-nosnippet>388</a>        <span class="kw">let </span><span class="kw-2">mut </span>mesh = <span class="kw">crate</span>::pipeline::vertex::mesh::K3dMesh::new(geometry);
+<a href=#389 id=389 data-nosnippet>389</a>        mesh.set_render_mode(<span class="kw">crate</span>::pipeline::vertex::mesh::RenderMode::Solid);
 <a href=#390 id=390 data-nosnippet>390</a>        mesh.set_color(Rgb565::new(<span class="number">31</span>, <span class="number">0</span>, <span class="number">0</span>));
 <a href=#391 id=391 data-nosnippet>391</a>
 <a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span><span class="kw-2">mut </span>triangles = [DepthSortedTriangle::DUMMY; <span class="number">256</span>];
@@ -410,7 +410,7 @@
 <a href=#410 id=410 data-nosnippet>410</a>            [<span class="number">30.0f32</span>, <span class="number">2.0</span>, <span class="number">0.0</span>], <span class="comment">// heavily clipped, typically produces a fan
 <a href=#411 id=411 data-nosnippet>411</a>        </span>];
 <a href=#412 id=412 data-nosnippet>412</a>        <span class="kw">let </span>faces = [[<span class="number">0usize</span>, <span class="number">1usize</span>, <span class="number">2usize</span>]];
-<a href=#413 id=413 data-nosnippet>413</a>        <span class="kw">let </span>geometry = <span class="kw">crate</span>::mesh::Geometry {
+<a href=#413 id=413 data-nosnippet>413</a>        <span class="kw">let </span>geometry = <span class="kw">crate</span>::pipeline::vertex::mesh::Geometry {
 <a href=#414 id=414 data-nosnippet>414</a>            vertices: <span class="kw-2">&amp;</span>vertices,
 <a href=#415 id=415 data-nosnippet>415</a>            faces: <span class="kw-2">&amp;</span>faces,
 <a href=#416 id=416 data-nosnippet>416</a>            colors: <span class="kw-2">&amp;</span>[],
@@ -420,8 +420,8 @@
 <a href=#420 id=420 data-nosnippet>420</a>            uvs: <span class="kw-2">&amp;</span>[],
 <a href=#421 id=421 data-nosnippet>421</a>            texture_id: <span class="prelude-val">None</span>,
 <a href=#422 id=422 data-nosnippet>422</a>        };
-<a href=#423 id=423 data-nosnippet>423</a>        <span class="kw">let </span><span class="kw-2">mut </span>mesh = <span class="kw">crate</span>::mesh::K3dMesh::new(geometry);
-<a href=#424 id=424 data-nosnippet>424</a>        mesh.set_render_mode(<span class="kw">crate</span>::mesh::RenderMode::Solid);
+<a href=#423 id=423 data-nosnippet>423</a>        <span class="kw">let </span><span class="kw-2">mut </span>mesh = <span class="kw">crate</span>::pipeline::vertex::mesh::K3dMesh::new(geometry);
+<a href=#424 id=424 data-nosnippet>424</a>        mesh.set_render_mode(<span class="kw">crate</span>::pipeline::vertex::mesh::RenderMode::Solid);
 <a href=#425 id=425 data-nosnippet>425</a>        mesh.set_color(Rgb565::new(<span class="number">0</span>, <span class="number">63</span>, <span class="number">0</span>));
 <a href=#426 id=426 data-nosnippet>426</a>
 <a href=#427 id=427 data-nosnippet>427</a>        <span class="kw">let </span><span class="kw-2">mut </span>triangles = [DepthSortedTriangle::DUMMY; <span class="number">256</span>];
@@ -476,62 +476,65 @@
 <a href=#476 id=476 data-nosnippet>476</a>        <span class="comment">// Test SectorBright &amp; point lights in painters
 <a href=#477 id=477 data-nosnippet>477</a>        </span><span class="attr">#[cfg(feature = <span class="string">"lighting"</span>)]
 <a href=#478 id=478 data-nosnippet>478</a>        </span>{
-<a href=#479 id=479 data-nosnippet>479</a>            <span class="kw">let </span>light =
-<a href=#480 id=480 data-nosnippet>480</a>                <span class="kw">crate</span>::lights::PointLight::new(Point3::new(<span class="number">0.0</span>, <span class="number">0.0</span>, <span class="number">1.0</span>), Rgb565::WHITE, <span class="number">10.0</span>);
-<a href=#481 id=481 data-nosnippet>481</a>            engine.add_point_light(light);
-<a href=#482 id=482 data-nosnippet>482</a>
-<a href=#483 id=483 data-nosnippet>483</a>            <span class="kw">let </span>geom = <span class="kw">crate</span>::mesh::Geometry {
-<a href=#484 id=484 data-nosnippet>484</a>                vertices: <span class="kw-2">&amp;</span>vertices,
-<a href=#485 id=485 data-nosnippet>485</a>                faces: <span class="kw-2">&amp;</span>[face],
-<a href=#486 id=486 data-nosnippet>486</a>                normals: <span class="kw-2">&amp;</span>normals,
-<a href=#487 id=487 data-nosnippet>487</a>                colors: <span class="kw-2">&amp;</span>[],
-<a href=#488 id=488 data-nosnippet>488</a>                lines: <span class="kw-2">&amp;</span>[],
-<a href=#489 id=489 data-nosnippet>489</a>                vertex_normals: <span class="kw-2">&amp;</span>[],
-<a href=#490 id=490 data-nosnippet>490</a>                uvs: <span class="kw-2">&amp;</span>[],
-<a href=#491 id=491 data-nosnippet>491</a>                texture_id: <span class="prelude-val">None</span>,
-<a href=#492 id=492 data-nosnippet>492</a>            };
-<a href=#493 id=493 data-nosnippet>493</a>            <span class="kw">let </span><span class="kw-2">mut </span>mesh = <span class="kw">crate</span>::mesh::K3dMesh::new(geom);
-<a href=#494 id=494 data-nosnippet>494</a>            mesh.set_render_mode(<span class="kw">crate</span>::mesh::RenderMode::SectorBright(<span class="number">200</span>));
-<a href=#495 id=495 data-nosnippet>495</a>
-<a href=#496 id=496 data-nosnippet>496</a>            <span class="kw">let </span><span class="kw-2">mut </span>triangles = [DepthSortedTriangle::DUMMY; <span class="number">16</span>];
-<a href=#497 id=497 data-nosnippet>497</a>            <span class="kw">let </span>count =
-<a href=#498 id=498 data-nosnippet>498</a>                engine.render_painters_algorithm(core::iter::once(<span class="kw-2">&amp;</span>mesh), <span class="kw-2">&amp;mut </span>triangles, |<span class="kw">_</span>| {});
-<a href=#499 id=499 data-nosnippet>499</a>            <span class="macro">assert_eq!</span>(count, <span class="number">1</span>);
-<a href=#500 id=500 data-nosnippet>500</a>        }
-<a href=#501 id=501 data-nosnippet>501</a>    }
-<a href=#502 id=502 data-nosnippet>502</a>
-<a href=#503 id=503 data-nosnippet>503</a>    <span class="attr">#[test]
-<a href=#504 id=504 data-nosnippet>504</a>    </span><span class="kw">fn </span>painters_out_of_bounds_and_empty_vertices() {
-<a href=#505 id=505 data-nosnippet>505</a>        <span class="kw">let </span>engine = K3dengine::new(<span class="number">320</span>, <span class="number">240</span>);
-<a href=#506 id=506 data-nosnippet>506</a>        <span class="kw">let </span>vertices_empty = [[<span class="number">0.0f32</span>, <span class="number">0.0</span>, <span class="number">0.0</span>]];
-<a href=#507 id=507 data-nosnippet>507</a>        <span class="kw">let </span>geom_empty = <span class="kw">crate</span>::mesh::Geometry {
-<a href=#508 id=508 data-nosnippet>508</a>            vertices: <span class="kw-2">&amp;</span>vertices_empty,
-<a href=#509 id=509 data-nosnippet>509</a>            faces: <span class="kw-2">&amp;</span>[],
-<a href=#510 id=510 data-nosnippet>510</a>            colors: <span class="kw-2">&amp;</span>[],
-<a href=#511 id=511 data-nosnippet>511</a>            lines: <span class="kw-2">&amp;</span>[],
-<a href=#512 id=512 data-nosnippet>512</a>            normals: <span class="kw-2">&amp;</span>[],
-<a href=#513 id=513 data-nosnippet>513</a>            vertex_normals: <span class="kw-2">&amp;</span>[],
-<a href=#514 id=514 data-nosnippet>514</a>            uvs: <span class="kw-2">&amp;</span>[],
-<a href=#515 id=515 data-nosnippet>515</a>            texture_id: <span class="prelude-val">None</span>,
-<a href=#516 id=516 data-nosnippet>516</a>        };
-<a href=#517 id=517 data-nosnippet>517</a>        <span class="kw">let </span>mesh_empty = <span class="kw">crate</span>::mesh::K3dMesh::new(geom_empty);
-<a href=#518 id=518 data-nosnippet>518</a>        <span class="kw">let </span><span class="kw-2">mut </span>triangles = [DepthSortedTriangle::DUMMY; <span class="number">16</span>];
-<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span>count =
-<a href=#520 id=520 data-nosnippet>520</a>            engine.render_painters_algorithm(core::iter::once(<span class="kw-2">&amp;</span>mesh_empty), <span class="kw-2">&amp;mut </span>triangles, |<span class="kw">_</span>| {});
-<a href=#521 id=521 data-nosnippet>521</a>        <span class="macro">assert_eq!</span>(count, <span class="number">0</span>);
-<a href=#522 id=522 data-nosnippet>522</a>
-<a href=#523 id=523 data-nosnippet>523</a>        <span class="kw">let </span>vertices = [[<span class="number">0.0f32</span>, <span class="number">0.0</span>, <span class="number">0.0</span>]];
-<a href=#524 id=524 data-nosnippet>524</a>        <span class="kw">let </span>geom_invalid_face = <span class="kw">crate</span>::mesh::Geometry {
-<a href=#525 id=525 data-nosnippet>525</a>            vertices: <span class="kw-2">&amp;</span>vertices,
-<a href=#526 id=526 data-nosnippet>526</a>            faces: <span class="kw-2">&amp;</span>[[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]],
-<a href=#527 id=527 data-nosnippet>527</a>            colors: <span class="kw-2">&amp;</span>[],
-<a href=#528 id=528 data-nosnippet>528</a>            lines: <span class="kw-2">&amp;</span>[],
-<a href=#529 id=529 data-nosnippet>529</a>            normals: <span class="kw-2">&amp;</span>[],
-<a href=#530 id=530 data-nosnippet>530</a>            vertex_normals: <span class="kw-2">&amp;</span>[],
-<a href=#531 id=531 data-nosnippet>531</a>            uvs: <span class="kw-2">&amp;</span>[],
-<a href=#532 id=532 data-nosnippet>532</a>            texture_id: <span class="prelude-val">None</span>,
-<a href=#533 id=533 data-nosnippet>533</a>        };
-<a href=#534 id=534 data-nosnippet>534</a>        <span class="macro">assert!</span>(!geom_invalid_face.check_validity());
-<a href=#535 id=535 data-nosnippet>535</a>    }
-<a href=#536 id=536 data-nosnippet>536</a>}
+<a href=#479 id=479 data-nosnippet>479</a>            <span class="kw">let </span>light = <span class="kw">crate</span>::pipeline::shade::lights::PointLight::new(
+<a href=#480 id=480 data-nosnippet>480</a>                Point3::new(<span class="number">0.0</span>, <span class="number">0.0</span>, <span class="number">1.0</span>),
+<a href=#481 id=481 data-nosnippet>481</a>                Rgb565::WHITE,
+<a href=#482 id=482 data-nosnippet>482</a>                <span class="number">10.0</span>,
+<a href=#483 id=483 data-nosnippet>483</a>            );
+<a href=#484 id=484 data-nosnippet>484</a>            engine.add_point_light(light);
+<a href=#485 id=485 data-nosnippet>485</a>
+<a href=#486 id=486 data-nosnippet>486</a>            <span class="kw">let </span>geom = <span class="kw">crate</span>::pipeline::vertex::mesh::Geometry {
+<a href=#487 id=487 data-nosnippet>487</a>                vertices: <span class="kw-2">&amp;</span>vertices,
+<a href=#488 id=488 data-nosnippet>488</a>                faces: <span class="kw-2">&amp;</span>[face],
+<a href=#489 id=489 data-nosnippet>489</a>                normals: <span class="kw-2">&amp;</span>normals,
+<a href=#490 id=490 data-nosnippet>490</a>                colors: <span class="kw-2">&amp;</span>[],
+<a href=#491 id=491 data-nosnippet>491</a>                lines: <span class="kw-2">&amp;</span>[],
+<a href=#492 id=492 data-nosnippet>492</a>                vertex_normals: <span class="kw-2">&amp;</span>[],
+<a href=#493 id=493 data-nosnippet>493</a>                uvs: <span class="kw-2">&amp;</span>[],
+<a href=#494 id=494 data-nosnippet>494</a>                texture_id: <span class="prelude-val">None</span>,
+<a href=#495 id=495 data-nosnippet>495</a>            };
+<a href=#496 id=496 data-nosnippet>496</a>            <span class="kw">let </span><span class="kw-2">mut </span>mesh = <span class="kw">crate</span>::pipeline::vertex::mesh::K3dMesh::new(geom);
+<a href=#497 id=497 data-nosnippet>497</a>            mesh.set_render_mode(<span class="kw">crate</span>::pipeline::vertex::mesh::RenderMode::SectorBright(<span class="number">200</span>));
+<a href=#498 id=498 data-nosnippet>498</a>
+<a href=#499 id=499 data-nosnippet>499</a>            <span class="kw">let </span><span class="kw-2">mut </span>triangles = [DepthSortedTriangle::DUMMY; <span class="number">16</span>];
+<a href=#500 id=500 data-nosnippet>500</a>            <span class="kw">let </span>count =
+<a href=#501 id=501 data-nosnippet>501</a>                engine.render_painters_algorithm(core::iter::once(<span class="kw-2">&amp;</span>mesh), <span class="kw-2">&amp;mut </span>triangles, |<span class="kw">_</span>| {});
+<a href=#502 id=502 data-nosnippet>502</a>            <span class="macro">assert_eq!</span>(count, <span class="number">1</span>);
+<a href=#503 id=503 data-nosnippet>503</a>        }
+<a href=#504 id=504 data-nosnippet>504</a>    }
+<a href=#505 id=505 data-nosnippet>505</a>
+<a href=#506 id=506 data-nosnippet>506</a>    <span class="attr">#[test]
+<a href=#507 id=507 data-nosnippet>507</a>    </span><span class="kw">fn </span>painters_out_of_bounds_and_empty_vertices() {
+<a href=#508 id=508 data-nosnippet>508</a>        <span class="kw">let </span>engine = K3dengine::new(<span class="number">320</span>, <span class="number">240</span>);
+<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw">let </span>vertices_empty = [[<span class="number">0.0f32</span>, <span class="number">0.0</span>, <span class="number">0.0</span>]];
+<a href=#510 id=510 data-nosnippet>510</a>        <span class="kw">let </span>geom_empty = <span class="kw">crate</span>::pipeline::vertex::mesh::Geometry {
+<a href=#511 id=511 data-nosnippet>511</a>            vertices: <span class="kw-2">&amp;</span>vertices_empty,
+<a href=#512 id=512 data-nosnippet>512</a>            faces: <span class="kw-2">&amp;</span>[],
+<a href=#513 id=513 data-nosnippet>513</a>            colors: <span class="kw-2">&amp;</span>[],
+<a href=#514 id=514 data-nosnippet>514</a>            lines: <span class="kw-2">&amp;</span>[],
+<a href=#515 id=515 data-nosnippet>515</a>            normals: <span class="kw-2">&amp;</span>[],
+<a href=#516 id=516 data-nosnippet>516</a>            vertex_normals: <span class="kw-2">&amp;</span>[],
+<a href=#517 id=517 data-nosnippet>517</a>            uvs: <span class="kw-2">&amp;</span>[],
+<a href=#518 id=518 data-nosnippet>518</a>            texture_id: <span class="prelude-val">None</span>,
+<a href=#519 id=519 data-nosnippet>519</a>        };
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">let </span>mesh_empty = <span class="kw">crate</span>::pipeline::vertex::mesh::K3dMesh::new(geom_empty);
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span><span class="kw-2">mut </span>triangles = [DepthSortedTriangle::DUMMY; <span class="number">16</span>];
+<a href=#522 id=522 data-nosnippet>522</a>        <span class="kw">let </span>count =
+<a href=#523 id=523 data-nosnippet>523</a>            engine.render_painters_algorithm(core::iter::once(<span class="kw-2">&amp;</span>mesh_empty), <span class="kw-2">&amp;mut </span>triangles, |<span class="kw">_</span>| {});
+<a href=#524 id=524 data-nosnippet>524</a>        <span class="macro">assert_eq!</span>(count, <span class="number">0</span>);
+<a href=#525 id=525 data-nosnippet>525</a>
+<a href=#526 id=526 data-nosnippet>526</a>        <span class="kw">let </span>vertices = [[<span class="number">0.0f32</span>, <span class="number">0.0</span>, <span class="number">0.0</span>]];
+<a href=#527 id=527 data-nosnippet>527</a>        <span class="kw">let </span>geom_invalid_face = <span class="kw">crate</span>::pipeline::vertex::mesh::Geometry {
+<a href=#528 id=528 data-nosnippet>528</a>            vertices: <span class="kw-2">&amp;</span>vertices,
+<a href=#529 id=529 data-nosnippet>529</a>            faces: <span class="kw-2">&amp;</span>[[<span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>]],
+<a href=#530 id=530 data-nosnippet>530</a>            colors: <span class="kw-2">&amp;</span>[],
+<a href=#531 id=531 data-nosnippet>531</a>            lines: <span class="kw-2">&amp;</span>[],
+<a href=#532 id=532 data-nosnippet>532</a>            normals: <span class="kw-2">&amp;</span>[],
+<a href=#533 id=533 data-nosnippet>533</a>            vertex_normals: <span class="kw-2">&amp;</span>[],
+<a href=#534 id=534 data-nosnippet>534</a>            uvs: <span class="kw-2">&amp;</span>[],
+<a href=#535 id=535 data-nosnippet>535</a>            texture_id: <span class="prelude-val">None</span>,
+<a href=#536 id=536 data-nosnippet>536</a>        };
+<a href=#537 id=537 data-nosnippet>537</a>        <span class="macro">assert!</span>(!geom_invalid_face.check_validity());
+<a href=#538 id=538 data-nosnippet>538</a>    }
+<a href=#539 id=539 data-nosnippet>539</a>}
 </code></pre></div></section></main></body></html>

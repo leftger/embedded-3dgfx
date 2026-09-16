@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CycleDirection","PaletteMode"],"struct":["AnimatedPalette","PaletteCycler","PaletteSlice"]};

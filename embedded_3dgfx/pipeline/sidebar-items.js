@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Stage"],"mod":["assemble","command_buffer","effects","output","rasterize","renderer","shade","vertex"],"trait":["StageKind"],"type":["ClipVertex","FragmentColor","ScreenPrimitive"]};

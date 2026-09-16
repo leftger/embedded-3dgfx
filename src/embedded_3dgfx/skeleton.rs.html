@@ -411,502 +411,506 @@
 <a href=#411 id=411 data-nosnippet>411</a>
 <a href=#412 id=412 data-nosnippet>412</a><span class="attr">#[cfg(feature = <span class="string">"anim-blend"</span>)]
 <a href=#413 id=413 data-nosnippet>413</a></span><span class="kw">mod </span>anim_blend_api {
-<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
-<a href=#415 id=415 data-nosnippet>415</a>
-<a href=#416 id=416 data-nosnippet>416</a>    <span class="doccomment">/// Local bone pose (position + rotation + scale) for clip sampling / blending.
-<a href=#417 id=417 data-nosnippet>417</a>    </span><span class="attr">#[derive(Debug, Clone, Copy)]
-<a href=#418 id=418 data-nosnippet>418</a>    </span><span class="kw">pub struct </span>BonePose {
-<a href=#419 id=419 data-nosnippet>419</a>        <span class="kw">pub </span>position: Vector3&lt;f32&gt;,
-<a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">pub </span>rotation: UnitQuaternion&lt;f32&gt;,
-<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">pub </span>scale: Vector3&lt;f32&gt;,
-<a href=#422 id=422 data-nosnippet>422</a>    }
-<a href=#423 id=423 data-nosnippet>423</a>
-<a href=#424 id=424 data-nosnippet>424</a>    <span class="kw">impl </span>BonePose {
-<a href=#425 id=425 data-nosnippet>425</a>        <span class="kw">pub fn </span>identity() -&gt; <span class="self">Self </span>{
-<a href=#426 id=426 data-nosnippet>426</a>            <span class="self">Self </span>{
-<a href=#427 id=427 data-nosnippet>427</a>                position: Vector3::zeros(),
-<a href=#428 id=428 data-nosnippet>428</a>                rotation: UnitQuaternion::identity(),
-<a href=#429 id=429 data-nosnippet>429</a>                scale: Vector3::new(<span class="number">1.0</span>, <span class="number">1.0</span>, <span class="number">1.0</span>),
-<a href=#430 id=430 data-nosnippet>430</a>            }
-<a href=#431 id=431 data-nosnippet>431</a>        }
-<a href=#432 id=432 data-nosnippet>432</a>
-<a href=#433 id=433 data-nosnippet>433</a>        <span class="doccomment">/// Spherical/linear blend between poses. Rotations use quaternion nlerp
-<a href=#434 id=434 data-nosnippet>434</a>        /// (normalized lerp) — cheap and stable for short arcs.
-<a href=#435 id=435 data-nosnippet>435</a>        </span><span class="kw">pub fn </span>blend(a: <span class="self">Self</span>, b: <span class="self">Self</span>, t: f32) -&gt; <span class="self">Self </span>{
-<a href=#436 id=436 data-nosnippet>436</a>            <span class="kw">let </span>t = t.clamp(<span class="number">0.0</span>, <span class="number">1.0</span>);
-<a href=#437 id=437 data-nosnippet>437</a>            <span class="kw">let </span>q1 = a.rotation.into_inner();
-<a href=#438 id=438 data-nosnippet>438</a>            <span class="kw">let </span><span class="kw-2">mut </span>q2 = b.rotation.into_inner();
-<a href=#439 id=439 data-nosnippet>439</a>            <span class="kw">if </span>q1.coords.dot(<span class="kw-2">&amp;</span>q2.coords) &lt; <span class="number">0.0 </span>{
-<a href=#440 id=440 data-nosnippet>440</a>                q2 = -q2;
-<a href=#441 id=441 data-nosnippet>441</a>            }
-<a href=#442 id=442 data-nosnippet>442</a>            <span class="kw">let </span>q = nalgebra::Quaternion::new(
-<a href=#443 id=443 data-nosnippet>443</a>                q1.w + (q2.w - q1.w) * t,
-<a href=#444 id=444 data-nosnippet>444</a>                q1.i + (q2.i - q1.i) * t,
-<a href=#445 id=445 data-nosnippet>445</a>                q1.j + (q2.j - q1.j) * t,
-<a href=#446 id=446 data-nosnippet>446</a>                q1.k + (q2.k - q1.k) * t,
-<a href=#447 id=447 data-nosnippet>447</a>            );
-<a href=#448 id=448 data-nosnippet>448</a>            <span class="self">Self </span>{
-<a href=#449 id=449 data-nosnippet>449</a>                position: a.position + (b.position - a.position) * t,
-<a href=#450 id=450 data-nosnippet>450</a>                rotation: UnitQuaternion::new_normalize(q),
-<a href=#451 id=451 data-nosnippet>451</a>                scale: a.scale + (b.scale - a.scale) * t,
-<a href=#452 id=452 data-nosnippet>452</a>            }
-<a href=#453 id=453 data-nosnippet>453</a>        }
-<a href=#454 id=454 data-nosnippet>454</a>    }
-<a href=#455 id=455 data-nosnippet>455</a>
-<a href=#456 id=456 data-nosnippet>456</a>    <span class="doccomment">/// One keyframed skeleton pose (parallel array of per-bone poses).
-<a href=#457 id=457 data-nosnippet>457</a>    </span><span class="attr">#[derive(Debug, Clone, Copy)]
-<a href=#458 id=458 data-nosnippet>458</a>    </span><span class="kw">pub struct </span>SkeletonKeyframe&lt;<span class="lifetime">'a</span>&gt; {
-<a href=#459 id=459 data-nosnippet>459</a>        <span class="kw">pub </span>time: f32,
-<a href=#460 id=460 data-nosnippet>460</a>        <span class="kw">pub </span>poses: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[BonePose],
-<a href=#461 id=461 data-nosnippet>461</a>    }
-<a href=#462 id=462 data-nosnippet>462</a>
-<a href=#463 id=463 data-nosnippet>463</a>    <span class="doccomment">/// Fixed-capacity clip: sorted keyframes of full-skeleton poses.
-<a href=#464 id=464 data-nosnippet>464</a>    </span><span class="attr">#[derive(Debug, Clone, Copy)]
-<a href=#465 id=465 data-nosnippet>465</a>    </span><span class="kw">pub struct </span>AnimClip&lt;<span class="lifetime">'a</span>&gt; {
-<a href=#466 id=466 data-nosnippet>466</a>        <span class="kw">pub </span>keyframes: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[SkeletonKeyframe&lt;<span class="lifetime">'a</span>&gt;],
-<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">pub </span>looping: bool,
-<a href=#468 id=468 data-nosnippet>468</a>    }
-<a href=#469 id=469 data-nosnippet>469</a>
-<a href=#470 id=470 data-nosnippet>470</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; AnimClip&lt;<span class="lifetime">'a</span>&gt; {
-<a href=#471 id=471 data-nosnippet>471</a>        <span class="doccomment">/// Create a new animation clip.
-<a href=#472 id=472 data-nosnippet>472</a>        </span><span class="kw">pub const fn </span>new(keyframes: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[SkeletonKeyframe&lt;<span class="lifetime">'a</span>&gt;], looping: bool) -&gt; <span class="self">Self </span>{
-<a href=#473 id=473 data-nosnippet>473</a>            <span class="self">Self </span>{ keyframes, looping }
-<a href=#474 id=474 data-nosnippet>474</a>        }
-<a href=#475 id=475 data-nosnippet>475</a>
-<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">pub fn </span>duration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; f32 {
-<a href=#477 id=477 data-nosnippet>477</a>            <span class="self">self</span>.keyframes.last().map(|k| k.time).unwrap_or(<span class="number">0.0</span>)
-<a href=#478 id=478 data-nosnippet>478</a>        }
-<a href=#479 id=479 data-nosnippet>479</a>
-<a href=#480 id=480 data-nosnippet>480</a>        <span class="doccomment">/// Sample pose channel `bone_index` at `time` into `out` (one BonePose).
-<a href=#481 id=481 data-nosnippet>481</a>        </span><span class="kw">pub fn </span>sample_bone(<span class="kw-2">&amp;</span><span class="self">self</span>, time: f32, bone_index: usize) -&gt; <span class="prelude-ty">Option</span>&lt;BonePose&gt; {
-<a href=#482 id=482 data-nosnippet>482</a>            <span class="kw">if </span><span class="self">self</span>.keyframes.is_empty() {
-<a href=#483 id=483 data-nosnippet>483</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#484 id=484 data-nosnippet>484</a>            }
-<a href=#485 id=485 data-nosnippet>485</a>            <span class="kw">let </span>duration = <span class="self">self</span>.duration();
-<a href=#486 id=486 data-nosnippet>486</a>            <span class="kw">let </span>t = <span class="kw">if </span><span class="self">self</span>.looping {
-<a href=#487 id=487 data-nosnippet>487</a>                <span class="kw">if </span>duration &gt; <span class="number">0.0 </span>{ time % duration } <span class="kw">else </span>{ <span class="number">0.0 </span>}
-<a href=#488 id=488 data-nosnippet>488</a>            } <span class="kw">else </span>{
-<a href=#489 id=489 data-nosnippet>489</a>                time.clamp(<span class="number">0.0</span>, duration)
-<a href=#490 id=490 data-nosnippet>490</a>            };
-<a href=#491 id=491 data-nosnippet>491</a>
-<a href=#492 id=492 data-nosnippet>492</a>            <span class="kw">let </span>idx = <span class="self">self</span>.keyframes.partition_point(|kf| kf.time &lt;= t);
-<a href=#493 id=493 data-nosnippet>493</a>            <span class="kw">let </span>i1 = idx.saturating_sub(<span class="number">1</span>);
-<a href=#494 id=494 data-nosnippet>494</a>            <span class="kw">let </span>i2 = idx.min(<span class="self">self</span>.keyframes.len() - <span class="number">1</span>).max(i1);
-<a href=#495 id=495 data-nosnippet>495</a>            <span class="kw">let </span>k1 = <span class="kw-2">&amp;</span><span class="self">self</span>.keyframes[i1];
-<a href=#496 id=496 data-nosnippet>496</a>            <span class="kw">let </span>k2 = <span class="kw-2">&amp;</span><span class="self">self</span>.keyframes[i2];
-<a href=#497 id=497 data-nosnippet>497</a>            <span class="kw">let </span>p1 = <span class="kw-2">*</span>k1.poses.get(bone_index)<span class="question-mark">?</span>;
-<a href=#498 id=498 data-nosnippet>498</a>            <span class="kw">if </span>i1 == i2 {
-<a href=#499 id=499 data-nosnippet>499</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(p1);
-<a href=#500 id=500 data-nosnippet>500</a>            }
-<a href=#501 id=501 data-nosnippet>501</a>            <span class="kw">let </span>p2 = <span class="kw-2">*</span>k2.poses.get(bone_index)<span class="question-mark">?</span>;
-<a href=#502 id=502 data-nosnippet>502</a>            <span class="kw">let </span>alpha = <span class="kw">if </span>k2.time &gt; k1.time {
-<a href=#503 id=503 data-nosnippet>503</a>                (t - k1.time) / (k2.time - k1.time)
-<a href=#504 id=504 data-nosnippet>504</a>            } <span class="kw">else </span>{
-<a href=#505 id=505 data-nosnippet>505</a>                <span class="number">0.0
-<a href=#506 id=506 data-nosnippet>506</a>            </span>};
-<a href=#507 id=507 data-nosnippet>507</a>            <span class="prelude-val">Some</span>(BonePose::blend(p1, p2, alpha))
-<a href=#508 id=508 data-nosnippet>508</a>        }
-<a href=#509 id=509 data-nosnippet>509</a>    }
-<a href=#510 id=510 data-nosnippet>510</a>
-<a href=#511 id=511 data-nosnippet>511</a>    <span class="doccomment">/// Weighted blend of up to 4 clip samples onto a skeleton's local bone transforms.
-<a href=#512 id=512 data-nosnippet>512</a>    ///
-<a href=#513 id=513 data-nosnippet>513</a>    /// `weights` are normalized if their sum &gt; 0. Each entry is `(clip, time, weight)`.
-<a href=#514 id=514 data-nosnippet>514</a>    </span><span class="kw">pub fn </span>blend_clips_onto_skeleton&lt;<span class="kw">const </span>N: usize, <span class="kw">const </span>C: usize&gt;(
-<a href=#515 id=515 data-nosnippet>515</a>        skeleton: <span class="kw-2">&amp;mut </span>Skeleton&lt;N&gt;,
-<a href=#516 id=516 data-nosnippet>516</a>        layers: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>AnimClip&lt;<span class="lifetime">'_</span>&gt;, f32, f32)],
-<a href=#517 id=517 data-nosnippet>517</a>    ) {
-<a href=#518 id=518 data-nosnippet>518</a>        <span class="kw">let </span><span class="kw-2">mut </span>accum: heapless::Vec&lt;(BonePose, f32), <span class="number">4</span>&gt; = heapless::Vec::new();
-<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">for </span>bone_i <span class="kw">in </span><span class="number">0</span>..skeleton.bones.len() {
-<a href=#520 id=520 data-nosnippet>520</a>            accum.clear();
-<a href=#521 id=521 data-nosnippet>521</a>            <span class="kw">let </span><span class="kw-2">mut </span>wsum = <span class="number">0.0f32</span>;
-<a href=#522 id=522 data-nosnippet>522</a>            <span class="kw">for </span><span class="kw-2">&amp;</span>(clip, time, w) <span class="kw">in </span>layers.iter().take(C.min(<span class="number">4</span>)) {
-<a href=#523 id=523 data-nosnippet>523</a>                <span class="kw">if </span>w &lt;= <span class="number">0.0 </span>{
-<a href=#524 id=524 data-nosnippet>524</a>                    <span class="kw">continue</span>;
-<a href=#525 id=525 data-nosnippet>525</a>                }
-<a href=#526 id=526 data-nosnippet>526</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(pose) = clip.sample_bone(time, bone_i) {
-<a href=#527 id=527 data-nosnippet>527</a>                    <span class="kw">let _ </span>= accum.push((pose, w));
-<a href=#528 id=528 data-nosnippet>528</a>                    wsum += w;
-<a href=#529 id=529 data-nosnippet>529</a>                }
-<a href=#530 id=530 data-nosnippet>530</a>            }
-<a href=#531 id=531 data-nosnippet>531</a>            <span class="kw">if </span>accum.is_empty() || wsum &lt;= <span class="number">0.0 </span>{
-<a href=#532 id=532 data-nosnippet>532</a>                <span class="kw">continue</span>;
-<a href=#533 id=533 data-nosnippet>533</a>            }
-<a href=#534 id=534 data-nosnippet>534</a>            <span class="kw">let </span><span class="kw-2">mut </span>blended = accum[<span class="number">0</span>].<span class="number">0</span>;
-<a href=#535 id=535 data-nosnippet>535</a>            <span class="kw">let </span><span class="kw-2">mut </span>acc_w = accum[<span class="number">0</span>].<span class="number">1 </span>/ wsum;
-<a href=#536 id=536 data-nosnippet>536</a>            <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..accum.len() {
-<a href=#537 id=537 data-nosnippet>537</a>                <span class="kw">let </span>w = accum[i].<span class="number">1 </span>/ wsum;
-<a href=#538 id=538 data-nosnippet>538</a>                <span class="kw">let </span>t = w / (acc_w + w);
-<a href=#539 id=539 data-nosnippet>539</a>                blended = BonePose::blend(blended, accum[i].<span class="number">0</span>, t);
-<a href=#540 id=540 data-nosnippet>540</a>                acc_w += w;
-<a href=#541 id=541 data-nosnippet>541</a>            }
-<a href=#542 id=542 data-nosnippet>542</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(bone) = skeleton.get_bone_mut(BoneId(bone_i)) {
-<a href=#543 id=543 data-nosnippet>543</a>                bone.position = blended.position;
-<a href=#544 id=544 data-nosnippet>544</a>                bone.rotation = blended.rotation;
-<a href=#545 id=545 data-nosnippet>545</a>                bone.scale = blended.scale;
-<a href=#546 id=546 data-nosnippet>546</a>                bone.update_local_transform();
-<a href=#547 id=547 data-nosnippet>547</a>            }
-<a href=#548 id=548 data-nosnippet>548</a>        }
-<a href=#549 id=549 data-nosnippet>549</a>    }
-<a href=#550 id=550 data-nosnippet>550</a>
-<a href=#551 id=551 data-nosnippet>551</a>    <span class="doccomment">/// Spherical linear interpolation for a bone rotation (always available; no `dsp` feature needed).
-<a href=#552 id=552 data-nosnippet>552</a>    </span><span class="kw">impl </span>Bone {
-<a href=#553 id=553 data-nosnippet>553</a>        <span class="kw">pub fn </span>slerp_rotation(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target: UnitQuaternion&lt;f32&gt;, t: f32) {
-<a href=#554 id=554 data-nosnippet>554</a>            <span class="self">self</span>.rotation = <span class="self">self</span>.rotation.slerp(<span class="kw-2">&amp;</span>target, t.clamp(<span class="number">0.0</span>, <span class="number">1.0</span>));
-<a href=#555 id=555 data-nosnippet>555</a>            <span class="self">self</span>.update_local_transform();
-<a href=#556 id=556 data-nosnippet>556</a>        }
-<a href=#557 id=557 data-nosnippet>557</a>    }
-<a href=#558 id=558 data-nosnippet>558</a>
-<a href=#559 id=559 data-nosnippet>559</a>    <span class="doccomment">/// Per-joint model-space AABB used to build skinned cull bounds.
-<a href=#560 id=560 data-nosnippet>560</a>    </span><span class="attr">#[derive(Debug, Clone, Copy)]
-<a href=#561 id=561 data-nosnippet>561</a>    </span><span class="kw">pub struct </span>JointAabb {
-<a href=#562 id=562 data-nosnippet>562</a>        <span class="kw">pub </span>center: Vector3&lt;f32&gt;,
-<a href=#563 id=563 data-nosnippet>563</a>        <span class="kw">pub </span>half_extents: Vector3&lt;f32&gt;,
-<a href=#564 id=564 data-nosnippet>564</a>    }
-<a href=#565 id=565 data-nosnippet>565</a>
-<a href=#566 id=566 data-nosnippet>566</a>    <span class="kw">impl </span>JointAabb {
-<a href=#567 id=567 data-nosnippet>567</a>        <span class="kw">pub fn </span>from_aabb(aabb: <span class="kw">crate</span>::bounds::Aabb) -&gt; <span class="self">Self </span>{
-<a href=#568 id=568 data-nosnippet>568</a>            <span class="self">Self </span>{
-<a href=#569 id=569 data-nosnippet>569</a>                center: aabb.center,
-<a href=#570 id=570 data-nosnippet>570</a>                half_extents: aabb.half_extents,
-<a href=#571 id=571 data-nosnippet>571</a>            }
-<a href=#572 id=572 data-nosnippet>572</a>        }
-<a href=#573 id=573 data-nosnippet>573</a>
-<a href=#574 id=574 data-nosnippet>574</a>        <span class="kw">pub fn </span>to_aabb(<span class="self">self</span>) -&gt; <span class="kw">crate</span>::bounds::Aabb {
-<a href=#575 id=575 data-nosnippet>575</a>            <span class="kw">crate</span>::bounds::Aabb {
-<a href=#576 id=576 data-nosnippet>576</a>                center: <span class="self">self</span>.center,
-<a href=#577 id=577 data-nosnippet>577</a>                half_extents: <span class="self">self</span>.half_extents,
-<a href=#578 id=578 data-nosnippet>578</a>            }
-<a href=#579 id=579 data-nosnippet>579</a>        }
-<a href=#580 id=580 data-nosnippet>580</a>    }
-<a href=#581 id=581 data-nosnippet>581</a>
-<a href=#582 id=582 data-nosnippet>582</a>    <span class="doccomment">/// Build per-joint AABBs from bind-pose vertices + skinning weights (model space).
-<a href=#583 id=583 data-nosnippet>583</a>    ///
-<a href=#584 id=584 data-nosnippet>584</a>    /// Each joint's AABB encloses vertices that have a non-zero weight on that joint.
-<a href=#585 id=585 data-nosnippet>585</a>    </span><span class="kw">pub fn </span>compute_joint_aabbs&lt;<span class="kw">const </span>N: usize&gt;(
-<a href=#586 id=586 data-nosnippet>586</a>        skeleton_bones: usize,
-<a href=#587 id=587 data-nosnippet>587</a>        skinning: <span class="kw-2">&amp;</span>SkinningData,
-<a href=#588 id=588 data-nosnippet>588</a>        vertices: <span class="kw-2">&amp;</span>[[f32; <span class="number">3</span>]],
-<a href=#589 id=589 data-nosnippet>589</a>    ) -&gt; heapless::Vec&lt;<span class="prelude-ty">Option</span>&lt;JointAabb&gt;, N&gt; {
-<a href=#590 id=590 data-nosnippet>590</a>        <span class="kw">let </span><span class="kw-2">mut </span>mins = [Vector3::new(f32::MAX, f32::MAX, f32::MAX); <span class="number">64</span>];
-<a href=#591 id=591 data-nosnippet>591</a>        <span class="kw">let </span><span class="kw-2">mut </span>maxs = [Vector3::new(f32::MIN, f32::MIN, f32::MIN); <span class="number">64</span>];
-<a href=#592 id=592 data-nosnippet>592</a>        <span class="kw">let </span><span class="kw-2">mut </span>used = [<span class="bool-val">false</span>; <span class="number">64</span>];
-<a href=#593 id=593 data-nosnippet>593</a>        <span class="kw">let </span>n = skeleton_bones.min(<span class="number">64</span>);
-<a href=#594 id=594 data-nosnippet>594</a>
-<a href=#595 id=595 data-nosnippet>595</a>        <span class="kw">for </span>(vi, skin) <span class="kw">in </span>skinning.vertex_skinning.iter().enumerate() {
-<a href=#596 id=596 data-nosnippet>596</a>            <span class="kw">if </span>vi &gt;= vertices.len() {
-<a href=#597 id=597 data-nosnippet>597</a>                <span class="kw">break</span>;
-<a href=#598 id=598 data-nosnippet>598</a>            }
-<a href=#599 id=599 data-nosnippet>599</a>            <span class="kw">let </span>p = Vector3::new(vertices[vi][<span class="number">0</span>], vertices[vi][<span class="number">1</span>], vertices[vi][<span class="number">2</span>]);
-<a href=#600 id=600 data-nosnippet>600</a>            <span class="kw">for </span>j <span class="kw">in </span><span class="number">0</span>..skin.num_influences {
-<a href=#601 id=601 data-nosnippet>601</a>                <span class="kw">if </span>skin.bone_weights[j] &lt;= <span class="number">0.0 </span>{
-<a href=#602 id=602 data-nosnippet>602</a>                    <span class="kw">continue</span>;
-<a href=#603 id=603 data-nosnippet>603</a>                }
-<a href=#604 id=604 data-nosnippet>604</a>                <span class="kw">let </span>bi = skin.bone_indices[j];
-<a href=#605 id=605 data-nosnippet>605</a>                <span class="kw">if </span>bi &gt;= n {
-<a href=#606 id=606 data-nosnippet>606</a>                    <span class="kw">continue</span>;
-<a href=#607 id=607 data-nosnippet>607</a>                }
-<a href=#608 id=608 data-nosnippet>608</a>                used[bi] = <span class="bool-val">true</span>;
-<a href=#609 id=609 data-nosnippet>609</a>                mins[bi].x = mins[bi].x.min(p.x);
-<a href=#610 id=610 data-nosnippet>610</a>                mins[bi].y = mins[bi].y.min(p.y);
-<a href=#611 id=611 data-nosnippet>611</a>                mins[bi].z = mins[bi].z.min(p.z);
-<a href=#612 id=612 data-nosnippet>612</a>                maxs[bi].x = maxs[bi].x.max(p.x);
-<a href=#613 id=613 data-nosnippet>613</a>                maxs[bi].y = maxs[bi].y.max(p.y);
-<a href=#614 id=614 data-nosnippet>614</a>                maxs[bi].z = maxs[bi].z.max(p.z);
-<a href=#615 id=615 data-nosnippet>615</a>            }
-<a href=#616 id=616 data-nosnippet>616</a>        }
-<a href=#617 id=617 data-nosnippet>617</a>
-<a href=#618 id=618 data-nosnippet>618</a>        <span class="kw">let </span><span class="kw-2">mut </span>out: heapless::Vec&lt;<span class="prelude-ty">Option</span>&lt;JointAabb&gt;, N&gt; = heapless::Vec::new();
-<a href=#619 id=619 data-nosnippet>619</a>        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..skeleton_bones.min(N) {
-<a href=#620 id=620 data-nosnippet>620</a>            <span class="kw">let </span>entry = <span class="kw">if </span>i &lt; <span class="number">64 </span>&amp;&amp; used[i] {
-<a href=#621 id=621 data-nosnippet>621</a>                <span class="prelude-val">Some</span>(JointAabb::from_aabb(<span class="kw">crate</span>::bounds::Aabb::from_min_max(
-<a href=#622 id=622 data-nosnippet>622</a>                    mins[i], maxs[i],
-<a href=#623 id=623 data-nosnippet>623</a>                )))
-<a href=#624 id=624 data-nosnippet>624</a>            } <span class="kw">else </span>{
-<a href=#625 id=625 data-nosnippet>625</a>                <span class="prelude-val">None
-<a href=#626 id=626 data-nosnippet>626</a>            </span>};
-<a href=#627 id=627 data-nosnippet>627</a>            <span class="kw">let _ </span>= out.push(entry);
-<a href=#628 id=628 data-nosnippet>628</a>        }
-<a href=#629 id=629 data-nosnippet>629</a>        out
-<a href=#630 id=630 data-nosnippet>630</a>    }
-<a href=#631 id=631 data-nosnippet>631</a>
-<a href=#632 id=632 data-nosnippet>632</a>    <span class="doccomment">/// Conservative model-space AABB of a skinned mesh under the current pose
-<a href=#633 id=633 data-nosnippet>633</a>    /// (Arvo OBB transform of each joint AABB, then union).
-<a href=#634 id=634 data-nosnippet>634</a>    </span><span class="kw">pub fn </span>skinned_model_aabb&lt;<span class="kw">const </span>N: usize&gt;(
-<a href=#635 id=635 data-nosnippet>635</a>        skeleton: <span class="kw-2">&amp;</span>Skeleton&lt;N&gt;,
-<a href=#636 id=636 data-nosnippet>636</a>        joint_aabbs: <span class="kw-2">&amp;</span>[<span class="prelude-ty">Option</span>&lt;JointAabb&gt;],
-<a href=#637 id=637 data-nosnippet>637</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::bounds::Aabb&gt; {
-<a href=#638 id=638 data-nosnippet>638</a>        <span class="kw">let </span><span class="kw-2">mut </span>acc: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::bounds::Aabb&gt; = <span class="prelude-val">None</span>;
-<a href=#639 id=639 data-nosnippet>639</a>        <span class="kw">for </span>(i, ja) <span class="kw">in </span>joint_aabbs.iter().enumerate() {
-<a href=#640 id=640 data-nosnippet>640</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(ja) = ja <span class="kw">else </span>{ <span class="kw">continue </span>};
-<a href=#641 id=641 data-nosnippet>641</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(bone) = skeleton.get_bone(BoneId(i)) <span class="kw">else </span>{
-<a href=#642 id=642 data-nosnippet>642</a>                <span class="kw">continue</span>;
-<a href=#643 id=643 data-nosnippet>643</a>            };
-<a href=#644 id=644 data-nosnippet>644</a>            <span class="kw">let </span>skin = bone.world_transform * bone.inverse_bind_pose;
-<a href=#645 id=645 data-nosnippet>645</a>            <span class="kw">let </span>local = ja.to_aabb();
-<a href=#646 id=646 data-nosnippet>646</a>            <span class="kw">let </span>world = local.transformed(<span class="kw-2">&amp;</span>skin);
-<a href=#647 id=647 data-nosnippet>647</a>            acc = <span class="prelude-val">Some</span>(<span class="kw">match </span>acc {
-<a href=#648 id=648 data-nosnippet>648</a>                <span class="prelude-val">Some</span>(a) =&gt; a.merge(world),
-<a href=#649 id=649 data-nosnippet>649</a>                <span class="prelude-val">None </span>=&gt; world,
-<a href=#650 id=650 data-nosnippet>650</a>            });
-<a href=#651 id=651 data-nosnippet>651</a>        }
-<a href=#652 id=652 data-nosnippet>652</a>        acc
-<a href=#653 id=653 data-nosnippet>653</a>    }
-<a href=#654 id=654 data-nosnippet>654</a>}
-<a href=#655 id=655 data-nosnippet>655</a>
-<a href=#656 id=656 data-nosnippet>656</a><span class="attr">#[cfg(feature = <span class="string">"anim-blend"</span>)]
-<a href=#657 id=657 data-nosnippet>657</a></span><span class="kw">pub use </span>anim_blend_api::<span class="kw-2">*</span>;
-<a href=#658 id=658 data-nosnippet>658</a>
-<a href=#659 id=659 data-nosnippet>659</a><span class="attr">#[cfg(all(feature = <span class="string">"dsp"</span>, feature = <span class="string">"anim-blend"</span>))]
-<a href=#660 id=660 data-nosnippet>660</a></span><span class="kw">impl </span>Bone {
-<a href=#661 id=661 data-nosnippet>661</a>    <span class="doccomment">/// Perform spherical linear interpolation (SLERP) between two bone rotations using `embedded-dsp` quaternions.
-<a href=#662 id=662 data-nosnippet>662</a>    </span><span class="kw">pub fn </span>interpolate_rotation_dsp(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target_rotation: UnitQuaternion&lt;f32&gt;, t: f32) {
-<a href=#663 id=663 data-nosnippet>663</a>        <span class="self">self</span>.slerp_rotation(target_rotation, t);
-<a href=#664 id=664 data-nosnippet>664</a>    }
-<a href=#665 id=665 data-nosnippet>665</a>}
-<a href=#666 id=666 data-nosnippet>666</a>
-<a href=#667 id=667 data-nosnippet>667</a><span class="attr">#[cfg(all(feature = <span class="string">"dsp"</span>, not(feature = <span class="string">"anim-blend"</span>)))]
-<a href=#668 id=668 data-nosnippet>668</a></span><span class="kw">impl </span>Bone {
-<a href=#669 id=669 data-nosnippet>669</a>    <span class="doccomment">/// Perform spherical linear interpolation (SLERP) between two bone rotations using `embedded-dsp` quaternions.
-<a href=#670 id=670 data-nosnippet>670</a>    </span><span class="kw">pub fn </span>interpolate_rotation_dsp(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target_rotation: UnitQuaternion&lt;f32&gt;, t: f32) {
-<a href=#671 id=671 data-nosnippet>671</a>        <span class="kw">let </span>q1 = [
-<a href=#672 id=672 data-nosnippet>672</a>            <span class="self">self</span>.rotation.w,
-<a href=#673 id=673 data-nosnippet>673</a>            <span class="self">self</span>.rotation.i,
-<a href=#674 id=674 data-nosnippet>674</a>            <span class="self">self</span>.rotation.j,
-<a href=#675 id=675 data-nosnippet>675</a>            <span class="self">self</span>.rotation.k,
-<a href=#676 id=676 data-nosnippet>676</a>        ];
-<a href=#677 id=677 data-nosnippet>677</a>        <span class="kw">let </span>q2 = [
-<a href=#678 id=678 data-nosnippet>678</a>            target_rotation.w,
-<a href=#679 id=679 data-nosnippet>679</a>            target_rotation.i,
-<a href=#680 id=680 data-nosnippet>680</a>            target_rotation.j,
-<a href=#681 id=681 data-nosnippet>681</a>            target_rotation.k,
-<a href=#682 id=682 data-nosnippet>682</a>        ];
-<a href=#683 id=683 data-nosnippet>683</a>        <span class="kw">let </span>dot = q1[<span class="number">0</span>] * q2[<span class="number">0</span>] + q1[<span class="number">1</span>] * q2[<span class="number">1</span>] + q1[<span class="number">2</span>] * q2[<span class="number">2</span>] + q1[<span class="number">3</span>] * q2[<span class="number">3</span>];
-<a href=#684 id=684 data-nosnippet>684</a>        <span class="kw">let </span>q2_adj = <span class="kw">if </span>dot &lt; <span class="number">0.0 </span>{
-<a href=#685 id=685 data-nosnippet>685</a>            [-q2[<span class="number">0</span>], -q2[<span class="number">1</span>], -q2[<span class="number">2</span>], -q2[<span class="number">3</span>]]
-<a href=#686 id=686 data-nosnippet>686</a>        } <span class="kw">else </span>{
-<a href=#687 id=687 data-nosnippet>687</a>            q2
-<a href=#688 id=688 data-nosnippet>688</a>        };
-<a href=#689 id=689 data-nosnippet>689</a>        <span class="kw">let </span>t_clamped = t.clamp(<span class="number">0.0</span>, <span class="number">1.0</span>);
-<a href=#690 id=690 data-nosnippet>690</a>        <span class="kw">let </span><span class="kw-2">mut </span>interpolated = [
-<a href=#691 id=691 data-nosnippet>691</a>            q1[<span class="number">0</span>] + (q2_adj[<span class="number">0</span>] - q1[<span class="number">0</span>]) * t_clamped,
-<a href=#692 id=692 data-nosnippet>692</a>            q1[<span class="number">1</span>] + (q2_adj[<span class="number">1</span>] - q1[<span class="number">1</span>]) * t_clamped,
-<a href=#693 id=693 data-nosnippet>693</a>            q1[<span class="number">2</span>] + (q2_adj[<span class="number">2</span>] - q1[<span class="number">2</span>]) * t_clamped,
-<a href=#694 id=694 data-nosnippet>694</a>            q1[<span class="number">3</span>] + (q2_adj[<span class="number">3</span>] - q1[<span class="number">3</span>]) * t_clamped,
-<a href=#695 id=695 data-nosnippet>695</a>        ];
-<a href=#696 id=696 data-nosnippet>696</a>        <span class="kw">let _ </span>= embedded_dsp::quaternion_normalize_f32(<span class="kw-2">&amp;mut </span>interpolated);
-<a href=#697 id=697 data-nosnippet>697</a>
-<a href=#698 id=698 data-nosnippet>698</a>        <span class="self">self</span>.rotation = UnitQuaternion::new_normalize(nalgebra::Quaternion::new(
-<a href=#699 id=699 data-nosnippet>699</a>            interpolated[<span class="number">0</span>],
-<a href=#700 id=700 data-nosnippet>700</a>            interpolated[<span class="number">1</span>],
-<a href=#701 id=701 data-nosnippet>701</a>            interpolated[<span class="number">2</span>],
-<a href=#702 id=702 data-nosnippet>702</a>            interpolated[<span class="number">3</span>],
-<a href=#703 id=703 data-nosnippet>703</a>        ));
-<a href=#704 id=704 data-nosnippet>704</a>        <span class="self">self</span>.update_local_transform();
-<a href=#705 id=705 data-nosnippet>705</a>    }
-<a href=#706 id=706 data-nosnippet>706</a>}
-<a href=#707 id=707 data-nosnippet>707</a>
-<a href=#708 id=708 data-nosnippet>708</a><span class="attr">#[cfg(test)]
-<a href=#709 id=709 data-nosnippet>709</a></span><span class="kw">mod </span>tests {
-<a href=#710 id=710 data-nosnippet>710</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">use super</span>::{Bone, BoneId, Skeleton, SkinningData};
+<a href=#415 id=415 data-nosnippet>415</a>    <span class="kw">use </span>nalgebra::{UnitQuaternion, Vector3};
+<a href=#416 id=416 data-nosnippet>416</a>
+<a href=#417 id=417 data-nosnippet>417</a>    <span class="doccomment">/// Local bone pose (position + rotation + scale) for clip sampling / blending.
+<a href=#418 id=418 data-nosnippet>418</a>    </span><span class="attr">#[derive(Debug, Clone, Copy)]
+<a href=#419 id=419 data-nosnippet>419</a>    </span><span class="kw">pub struct </span>BonePose {
+<a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">pub </span>position: Vector3&lt;f32&gt;,
+<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">pub </span>rotation: UnitQuaternion&lt;f32&gt;,
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw">pub </span>scale: Vector3&lt;f32&gt;,
+<a href=#423 id=423 data-nosnippet>423</a>    }
+<a href=#424 id=424 data-nosnippet>424</a>
+<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">impl </span>BonePose {
+<a href=#426 id=426 data-nosnippet>426</a>        <span class="kw">pub fn </span>identity() -&gt; <span class="self">Self </span>{
+<a href=#427 id=427 data-nosnippet>427</a>            <span class="self">Self </span>{
+<a href=#428 id=428 data-nosnippet>428</a>                position: Vector3::zeros(),
+<a href=#429 id=429 data-nosnippet>429</a>                rotation: UnitQuaternion::identity(),
+<a href=#430 id=430 data-nosnippet>430</a>                scale: Vector3::new(<span class="number">1.0</span>, <span class="number">1.0</span>, <span class="number">1.0</span>),
+<a href=#431 id=431 data-nosnippet>431</a>            }
+<a href=#432 id=432 data-nosnippet>432</a>        }
+<a href=#433 id=433 data-nosnippet>433</a>
+<a href=#434 id=434 data-nosnippet>434</a>        <span class="doccomment">/// Spherical/linear blend between poses. Rotations use quaternion nlerp
+<a href=#435 id=435 data-nosnippet>435</a>        /// (normalized lerp) — cheap and stable for short arcs.
+<a href=#436 id=436 data-nosnippet>436</a>        </span><span class="kw">pub fn </span>blend(a: <span class="self">Self</span>, b: <span class="self">Self</span>, t: f32) -&gt; <span class="self">Self </span>{
+<a href=#437 id=437 data-nosnippet>437</a>            <span class="kw">let </span>t = t.clamp(<span class="number">0.0</span>, <span class="number">1.0</span>);
+<a href=#438 id=438 data-nosnippet>438</a>            <span class="kw">let </span>q1 = a.rotation.into_inner();
+<a href=#439 id=439 data-nosnippet>439</a>            <span class="kw">let </span><span class="kw-2">mut </span>q2 = b.rotation.into_inner();
+<a href=#440 id=440 data-nosnippet>440</a>            <span class="kw">if </span>q1.coords.dot(<span class="kw-2">&amp;</span>q2.coords) &lt; <span class="number">0.0 </span>{
+<a href=#441 id=441 data-nosnippet>441</a>                q2 = -q2;
+<a href=#442 id=442 data-nosnippet>442</a>            }
+<a href=#443 id=443 data-nosnippet>443</a>            <span class="kw">let </span>q = nalgebra::Quaternion::new(
+<a href=#444 id=444 data-nosnippet>444</a>                q1.w + (q2.w - q1.w) * t,
+<a href=#445 id=445 data-nosnippet>445</a>                q1.i + (q2.i - q1.i) * t,
+<a href=#446 id=446 data-nosnippet>446</a>                q1.j + (q2.j - q1.j) * t,
+<a href=#447 id=447 data-nosnippet>447</a>                q1.k + (q2.k - q1.k) * t,
+<a href=#448 id=448 data-nosnippet>448</a>            );
+<a href=#449 id=449 data-nosnippet>449</a>            <span class="self">Self </span>{
+<a href=#450 id=450 data-nosnippet>450</a>                position: a.position + (b.position - a.position) * t,
+<a href=#451 id=451 data-nosnippet>451</a>                rotation: UnitQuaternion::new_normalize(q),
+<a href=#452 id=452 data-nosnippet>452</a>                scale: a.scale + (b.scale - a.scale) * t,
+<a href=#453 id=453 data-nosnippet>453</a>            }
+<a href=#454 id=454 data-nosnippet>454</a>        }
+<a href=#455 id=455 data-nosnippet>455</a>    }
+<a href=#456 id=456 data-nosnippet>456</a>
+<a href=#457 id=457 data-nosnippet>457</a>    <span class="doccomment">/// One keyframed skeleton pose (parallel array of per-bone poses).
+<a href=#458 id=458 data-nosnippet>458</a>    </span><span class="attr">#[derive(Debug, Clone, Copy)]
+<a href=#459 id=459 data-nosnippet>459</a>    </span><span class="kw">pub struct </span>SkeletonKeyframe&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#460 id=460 data-nosnippet>460</a>        <span class="kw">pub </span>time: f32,
+<a href=#461 id=461 data-nosnippet>461</a>        <span class="kw">pub </span>poses: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[BonePose],
+<a href=#462 id=462 data-nosnippet>462</a>    }
+<a href=#463 id=463 data-nosnippet>463</a>
+<a href=#464 id=464 data-nosnippet>464</a>    <span class="doccomment">/// Fixed-capacity clip: sorted keyframes of full-skeleton poses.
+<a href=#465 id=465 data-nosnippet>465</a>    </span><span class="attr">#[derive(Debug, Clone, Copy)]
+<a href=#466 id=466 data-nosnippet>466</a>    </span><span class="kw">pub struct </span>AnimClip&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">pub </span>keyframes: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[SkeletonKeyframe&lt;<span class="lifetime">'a</span>&gt;],
+<a href=#468 id=468 data-nosnippet>468</a>        <span class="kw">pub </span>looping: bool,
+<a href=#469 id=469 data-nosnippet>469</a>    }
+<a href=#470 id=470 data-nosnippet>470</a>
+<a href=#471 id=471 data-nosnippet>471</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; AnimClip&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#472 id=472 data-nosnippet>472</a>        <span class="doccomment">/// Create a new animation clip.
+<a href=#473 id=473 data-nosnippet>473</a>        </span><span class="kw">pub const fn </span>new(keyframes: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[SkeletonKeyframe&lt;<span class="lifetime">'a</span>&gt;], looping: bool) -&gt; <span class="self">Self </span>{
+<a href=#474 id=474 data-nosnippet>474</a>            <span class="self">Self </span>{ keyframes, looping }
+<a href=#475 id=475 data-nosnippet>475</a>        }
+<a href=#476 id=476 data-nosnippet>476</a>
+<a href=#477 id=477 data-nosnippet>477</a>        <span class="kw">pub fn </span>duration(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; f32 {
+<a href=#478 id=478 data-nosnippet>478</a>            <span class="self">self</span>.keyframes.last().map(|k| k.time).unwrap_or(<span class="number">0.0</span>)
+<a href=#479 id=479 data-nosnippet>479</a>        }
+<a href=#480 id=480 data-nosnippet>480</a>
+<a href=#481 id=481 data-nosnippet>481</a>        <span class="doccomment">/// Sample pose channel `bone_index` at `time` into `out` (one BonePose).
+<a href=#482 id=482 data-nosnippet>482</a>        </span><span class="kw">pub fn </span>sample_bone(<span class="kw-2">&amp;</span><span class="self">self</span>, time: f32, bone_index: usize) -&gt; <span class="prelude-ty">Option</span>&lt;BonePose&gt; {
+<a href=#483 id=483 data-nosnippet>483</a>            <span class="kw">if </span><span class="self">self</span>.keyframes.is_empty() {
+<a href=#484 id=484 data-nosnippet>484</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#485 id=485 data-nosnippet>485</a>            }
+<a href=#486 id=486 data-nosnippet>486</a>            <span class="kw">let </span>duration = <span class="self">self</span>.duration();
+<a href=#487 id=487 data-nosnippet>487</a>            <span class="kw">let </span>t = <span class="kw">if </span><span class="self">self</span>.looping {
+<a href=#488 id=488 data-nosnippet>488</a>                <span class="kw">if </span>duration &gt; <span class="number">0.0 </span>{ time % duration } <span class="kw">else </span>{ <span class="number">0.0 </span>}
+<a href=#489 id=489 data-nosnippet>489</a>            } <span class="kw">else </span>{
+<a href=#490 id=490 data-nosnippet>490</a>                time.clamp(<span class="number">0.0</span>, duration)
+<a href=#491 id=491 data-nosnippet>491</a>            };
+<a href=#492 id=492 data-nosnippet>492</a>
+<a href=#493 id=493 data-nosnippet>493</a>            <span class="kw">let </span>idx = <span class="self">self</span>.keyframes.partition_point(|kf| kf.time &lt;= t);
+<a href=#494 id=494 data-nosnippet>494</a>            <span class="kw">let </span>i1 = idx.saturating_sub(<span class="number">1</span>);
+<a href=#495 id=495 data-nosnippet>495</a>            <span class="kw">let </span>i2 = idx.min(<span class="self">self</span>.keyframes.len() - <span class="number">1</span>).max(i1);
+<a href=#496 id=496 data-nosnippet>496</a>            <span class="kw">let </span>k1 = <span class="kw-2">&amp;</span><span class="self">self</span>.keyframes[i1];
+<a href=#497 id=497 data-nosnippet>497</a>            <span class="kw">let </span>k2 = <span class="kw-2">&amp;</span><span class="self">self</span>.keyframes[i2];
+<a href=#498 id=498 data-nosnippet>498</a>            <span class="kw">let </span>p1 = <span class="kw-2">*</span>k1.poses.get(bone_index)<span class="question-mark">?</span>;
+<a href=#499 id=499 data-nosnippet>499</a>            <span class="kw">if </span>i1 == i2 {
+<a href=#500 id=500 data-nosnippet>500</a>                <span class="kw">return </span><span class="prelude-val">Some</span>(p1);
+<a href=#501 id=501 data-nosnippet>501</a>            }
+<a href=#502 id=502 data-nosnippet>502</a>            <span class="kw">let </span>p2 = <span class="kw-2">*</span>k2.poses.get(bone_index)<span class="question-mark">?</span>;
+<a href=#503 id=503 data-nosnippet>503</a>            <span class="kw">let </span>alpha = <span class="kw">if </span>k2.time &gt; k1.time {
+<a href=#504 id=504 data-nosnippet>504</a>                (t - k1.time) / (k2.time - k1.time)
+<a href=#505 id=505 data-nosnippet>505</a>            } <span class="kw">else </span>{
+<a href=#506 id=506 data-nosnippet>506</a>                <span class="number">0.0
+<a href=#507 id=507 data-nosnippet>507</a>            </span>};
+<a href=#508 id=508 data-nosnippet>508</a>            <span class="prelude-val">Some</span>(BonePose::blend(p1, p2, alpha))
+<a href=#509 id=509 data-nosnippet>509</a>        }
+<a href=#510 id=510 data-nosnippet>510</a>    }
+<a href=#511 id=511 data-nosnippet>511</a>
+<a href=#512 id=512 data-nosnippet>512</a>    <span class="doccomment">/// Weighted blend of up to 4 clip samples onto a skeleton's local bone transforms.
+<a href=#513 id=513 data-nosnippet>513</a>    ///
+<a href=#514 id=514 data-nosnippet>514</a>    /// `weights` are normalized if their sum &gt; 0. Each entry is `(clip, time, weight)`.
+<a href=#515 id=515 data-nosnippet>515</a>    </span><span class="kw">pub fn </span>blend_clips_onto_skeleton&lt;<span class="kw">const </span>N: usize, <span class="kw">const </span>C: usize&gt;(
+<a href=#516 id=516 data-nosnippet>516</a>        skeleton: <span class="kw-2">&amp;mut </span>Skeleton&lt;N&gt;,
+<a href=#517 id=517 data-nosnippet>517</a>        layers: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>AnimClip&lt;<span class="lifetime">'_</span>&gt;, f32, f32)],
+<a href=#518 id=518 data-nosnippet>518</a>    ) {
+<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw">let </span><span class="kw-2">mut </span>accum: heapless::Vec&lt;(BonePose, f32), <span class="number">4</span>&gt; = heapless::Vec::new();
+<a href=#520 id=520 data-nosnippet>520</a>        <span class="kw">for </span>bone_i <span class="kw">in </span><span class="number">0</span>..skeleton.bones.len() {
+<a href=#521 id=521 data-nosnippet>521</a>            accum.clear();
+<a href=#522 id=522 data-nosnippet>522</a>            <span class="kw">let </span><span class="kw-2">mut </span>wsum = <span class="number">0.0f32</span>;
+<a href=#523 id=523 data-nosnippet>523</a>            <span class="kw">for </span><span class="kw-2">&amp;</span>(clip, time, w) <span class="kw">in </span>layers.iter().take(C.min(<span class="number">4</span>)) {
+<a href=#524 id=524 data-nosnippet>524</a>                <span class="kw">if </span>w &lt;= <span class="number">0.0 </span>{
+<a href=#525 id=525 data-nosnippet>525</a>                    <span class="kw">continue</span>;
+<a href=#526 id=526 data-nosnippet>526</a>                }
+<a href=#527 id=527 data-nosnippet>527</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(pose) = clip.sample_bone(time, bone_i) {
+<a href=#528 id=528 data-nosnippet>528</a>                    <span class="kw">let _ </span>= accum.push((pose, w));
+<a href=#529 id=529 data-nosnippet>529</a>                    wsum += w;
+<a href=#530 id=530 data-nosnippet>530</a>                }
+<a href=#531 id=531 data-nosnippet>531</a>            }
+<a href=#532 id=532 data-nosnippet>532</a>            <span class="kw">if </span>accum.is_empty() || wsum &lt;= <span class="number">0.0 </span>{
+<a href=#533 id=533 data-nosnippet>533</a>                <span class="kw">continue</span>;
+<a href=#534 id=534 data-nosnippet>534</a>            }
+<a href=#535 id=535 data-nosnippet>535</a>            <span class="kw">let </span><span class="kw-2">mut </span>blended = accum[<span class="number">0</span>].<span class="number">0</span>;
+<a href=#536 id=536 data-nosnippet>536</a>            <span class="kw">let </span><span class="kw-2">mut </span>acc_w = accum[<span class="number">0</span>].<span class="number">1 </span>/ wsum;
+<a href=#537 id=537 data-nosnippet>537</a>            <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..accum.len() {
+<a href=#538 id=538 data-nosnippet>538</a>                <span class="kw">let </span>w = accum[i].<span class="number">1 </span>/ wsum;
+<a href=#539 id=539 data-nosnippet>539</a>                <span class="kw">let </span>t = w / (acc_w + w);
+<a href=#540 id=540 data-nosnippet>540</a>                blended = BonePose::blend(blended, accum[i].<span class="number">0</span>, t);
+<a href=#541 id=541 data-nosnippet>541</a>                acc_w += w;
+<a href=#542 id=542 data-nosnippet>542</a>            }
+<a href=#543 id=543 data-nosnippet>543</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(bone) = skeleton.get_bone_mut(BoneId(bone_i)) {
+<a href=#544 id=544 data-nosnippet>544</a>                bone.position = blended.position;
+<a href=#545 id=545 data-nosnippet>545</a>                bone.rotation = blended.rotation;
+<a href=#546 id=546 data-nosnippet>546</a>                bone.scale = blended.scale;
+<a href=#547 id=547 data-nosnippet>547</a>                bone.update_local_transform();
+<a href=#548 id=548 data-nosnippet>548</a>            }
+<a href=#549 id=549 data-nosnippet>549</a>        }
+<a href=#550 id=550 data-nosnippet>550</a>    }
+<a href=#551 id=551 data-nosnippet>551</a>
+<a href=#552 id=552 data-nosnippet>552</a>    <span class="doccomment">/// Spherical linear interpolation for a bone rotation (always available; no `dsp` feature needed).
+<a href=#553 id=553 data-nosnippet>553</a>    </span><span class="kw">impl </span>Bone {
+<a href=#554 id=554 data-nosnippet>554</a>        <span class="kw">pub fn </span>slerp_rotation(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target: UnitQuaternion&lt;f32&gt;, t: f32) {
+<a href=#555 id=555 data-nosnippet>555</a>            <span class="self">self</span>.rotation = <span class="self">self</span>.rotation.slerp(<span class="kw-2">&amp;</span>target, t.clamp(<span class="number">0.0</span>, <span class="number">1.0</span>));
+<a href=#556 id=556 data-nosnippet>556</a>            <span class="self">self</span>.update_local_transform();
+<a href=#557 id=557 data-nosnippet>557</a>        }
+<a href=#558 id=558 data-nosnippet>558</a>    }
+<a href=#559 id=559 data-nosnippet>559</a>
+<a href=#560 id=560 data-nosnippet>560</a>    <span class="doccomment">/// Per-joint model-space AABB used to build skinned cull bounds.
+<a href=#561 id=561 data-nosnippet>561</a>    </span><span class="attr">#[derive(Debug, Clone, Copy)]
+<a href=#562 id=562 data-nosnippet>562</a>    </span><span class="kw">pub struct </span>JointAabb {
+<a href=#563 id=563 data-nosnippet>563</a>        <span class="kw">pub </span>center: Vector3&lt;f32&gt;,
+<a href=#564 id=564 data-nosnippet>564</a>        <span class="kw">pub </span>half_extents: Vector3&lt;f32&gt;,
+<a href=#565 id=565 data-nosnippet>565</a>    }
+<a href=#566 id=566 data-nosnippet>566</a>
+<a href=#567 id=567 data-nosnippet>567</a>    <span class="kw">impl </span>JointAabb {
+<a href=#568 id=568 data-nosnippet>568</a>        <span class="kw">pub fn </span>from_aabb(aabb: <span class="kw">crate</span>::pipeline::vertex::bounds::Aabb) -&gt; <span class="self">Self </span>{
+<a href=#569 id=569 data-nosnippet>569</a>            <span class="self">Self </span>{
+<a href=#570 id=570 data-nosnippet>570</a>                center: aabb.center,
+<a href=#571 id=571 data-nosnippet>571</a>                half_extents: aabb.half_extents,
+<a href=#572 id=572 data-nosnippet>572</a>            }
+<a href=#573 id=573 data-nosnippet>573</a>        }
+<a href=#574 id=574 data-nosnippet>574</a>
+<a href=#575 id=575 data-nosnippet>575</a>        <span class="kw">pub fn </span>to_aabb(<span class="self">self</span>) -&gt; <span class="kw">crate</span>::pipeline::vertex::bounds::Aabb {
+<a href=#576 id=576 data-nosnippet>576</a>            <span class="kw">crate</span>::pipeline::vertex::bounds::Aabb {
+<a href=#577 id=577 data-nosnippet>577</a>                center: <span class="self">self</span>.center,
+<a href=#578 id=578 data-nosnippet>578</a>                half_extents: <span class="self">self</span>.half_extents,
+<a href=#579 id=579 data-nosnippet>579</a>            }
+<a href=#580 id=580 data-nosnippet>580</a>        }
+<a href=#581 id=581 data-nosnippet>581</a>    }
+<a href=#582 id=582 data-nosnippet>582</a>
+<a href=#583 id=583 data-nosnippet>583</a>    <span class="doccomment">/// Build per-joint AABBs from bind-pose vertices + skinning weights (model space).
+<a href=#584 id=584 data-nosnippet>584</a>    ///
+<a href=#585 id=585 data-nosnippet>585</a>    /// Each joint's AABB encloses vertices that have a non-zero weight on that joint.
+<a href=#586 id=586 data-nosnippet>586</a>    </span><span class="kw">pub fn </span>compute_joint_aabbs&lt;<span class="kw">const </span>N: usize&gt;(
+<a href=#587 id=587 data-nosnippet>587</a>        skeleton_bones: usize,
+<a href=#588 id=588 data-nosnippet>588</a>        skinning: <span class="kw-2">&amp;</span>SkinningData,
+<a href=#589 id=589 data-nosnippet>589</a>        vertices: <span class="kw-2">&amp;</span>[[f32; <span class="number">3</span>]],
+<a href=#590 id=590 data-nosnippet>590</a>    ) -&gt; heapless::Vec&lt;<span class="prelude-ty">Option</span>&lt;JointAabb&gt;, N&gt; {
+<a href=#591 id=591 data-nosnippet>591</a>        <span class="kw">let </span><span class="kw-2">mut </span>mins = [Vector3::new(f32::MAX, f32::MAX, f32::MAX); <span class="number">64</span>];
+<a href=#592 id=592 data-nosnippet>592</a>        <span class="kw">let </span><span class="kw-2">mut </span>maxs = [Vector3::new(f32::MIN, f32::MIN, f32::MIN); <span class="number">64</span>];
+<a href=#593 id=593 data-nosnippet>593</a>        <span class="kw">let </span><span class="kw-2">mut </span>used = [<span class="bool-val">false</span>; <span class="number">64</span>];
+<a href=#594 id=594 data-nosnippet>594</a>        <span class="kw">let </span>n = skeleton_bones.min(<span class="number">64</span>);
+<a href=#595 id=595 data-nosnippet>595</a>
+<a href=#596 id=596 data-nosnippet>596</a>        <span class="kw">for </span>(vi, skin) <span class="kw">in </span>skinning.vertex_skinning.iter().enumerate() {
+<a href=#597 id=597 data-nosnippet>597</a>            <span class="kw">if </span>vi &gt;= vertices.len() {
+<a href=#598 id=598 data-nosnippet>598</a>                <span class="kw">break</span>;
+<a href=#599 id=599 data-nosnippet>599</a>            }
+<a href=#600 id=600 data-nosnippet>600</a>            <span class="kw">let </span>p = Vector3::new(vertices[vi][<span class="number">0</span>], vertices[vi][<span class="number">1</span>], vertices[vi][<span class="number">2</span>]);
+<a href=#601 id=601 data-nosnippet>601</a>            <span class="kw">for </span>j <span class="kw">in </span><span class="number">0</span>..skin.num_influences {
+<a href=#602 id=602 data-nosnippet>602</a>                <span class="kw">if </span>skin.bone_weights[j] &lt;= <span class="number">0.0 </span>{
+<a href=#603 id=603 data-nosnippet>603</a>                    <span class="kw">continue</span>;
+<a href=#604 id=604 data-nosnippet>604</a>                }
+<a href=#605 id=605 data-nosnippet>605</a>                <span class="kw">let </span>bi = skin.bone_indices[j];
+<a href=#606 id=606 data-nosnippet>606</a>                <span class="kw">if </span>bi &gt;= n {
+<a href=#607 id=607 data-nosnippet>607</a>                    <span class="kw">continue</span>;
+<a href=#608 id=608 data-nosnippet>608</a>                }
+<a href=#609 id=609 data-nosnippet>609</a>                used[bi] = <span class="bool-val">true</span>;
+<a href=#610 id=610 data-nosnippet>610</a>                mins[bi].x = mins[bi].x.min(p.x);
+<a href=#611 id=611 data-nosnippet>611</a>                mins[bi].y = mins[bi].y.min(p.y);
+<a href=#612 id=612 data-nosnippet>612</a>                mins[bi].z = mins[bi].z.min(p.z);
+<a href=#613 id=613 data-nosnippet>613</a>                maxs[bi].x = maxs[bi].x.max(p.x);
+<a href=#614 id=614 data-nosnippet>614</a>                maxs[bi].y = maxs[bi].y.max(p.y);
+<a href=#615 id=615 data-nosnippet>615</a>                maxs[bi].z = maxs[bi].z.max(p.z);
+<a href=#616 id=616 data-nosnippet>616</a>            }
+<a href=#617 id=617 data-nosnippet>617</a>        }
+<a href=#618 id=618 data-nosnippet>618</a>
+<a href=#619 id=619 data-nosnippet>619</a>        <span class="kw">let </span><span class="kw-2">mut </span>out: heapless::Vec&lt;<span class="prelude-ty">Option</span>&lt;JointAabb&gt;, N&gt; = heapless::Vec::new();
+<a href=#620 id=620 data-nosnippet>620</a>        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..skeleton_bones.min(N) {
+<a href=#621 id=621 data-nosnippet>621</a>            <span class="kw">let </span>entry = <span class="kw">if </span>i &lt; <span class="number">64 </span>&amp;&amp; used[i] {
+<a href=#622 id=622 data-nosnippet>622</a>                <span class="prelude-val">Some</span>(JointAabb::from_aabb(
+<a href=#623 id=623 data-nosnippet>623</a>                    <span class="kw">crate</span>::pipeline::vertex::bounds::Aabb::from_min_max(mins[i], maxs[i]),
+<a href=#624 id=624 data-nosnippet>624</a>                ))
+<a href=#625 id=625 data-nosnippet>625</a>            } <span class="kw">else </span>{
+<a href=#626 id=626 data-nosnippet>626</a>                <span class="prelude-val">None
+<a href=#627 id=627 data-nosnippet>627</a>            </span>};
+<a href=#628 id=628 data-nosnippet>628</a>            <span class="kw">let _ </span>= out.push(entry);
+<a href=#629 id=629 data-nosnippet>629</a>        }
+<a href=#630 id=630 data-nosnippet>630</a>        out
+<a href=#631 id=631 data-nosnippet>631</a>    }
+<a href=#632 id=632 data-nosnippet>632</a>
+<a href=#633 id=633 data-nosnippet>633</a>    <span class="doccomment">/// Conservative model-space AABB of a skinned mesh under the current pose
+<a href=#634 id=634 data-nosnippet>634</a>    /// (Arvo OBB transform of each joint AABB, then union).
+<a href=#635 id=635 data-nosnippet>635</a>    </span><span class="kw">pub fn </span>skinned_model_aabb&lt;<span class="kw">const </span>N: usize&gt;(
+<a href=#636 id=636 data-nosnippet>636</a>        skeleton: <span class="kw-2">&amp;</span>Skeleton&lt;N&gt;,
+<a href=#637 id=637 data-nosnippet>637</a>        joint_aabbs: <span class="kw-2">&amp;</span>[<span class="prelude-ty">Option</span>&lt;JointAabb&gt;],
+<a href=#638 id=638 data-nosnippet>638</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::pipeline::vertex::bounds::Aabb&gt; {
+<a href=#639 id=639 data-nosnippet>639</a>        <span class="kw">let </span><span class="kw-2">mut </span>acc: <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::pipeline::vertex::bounds::Aabb&gt; = <span class="prelude-val">None</span>;
+<a href=#640 id=640 data-nosnippet>640</a>        <span class="kw">for </span>(i, ja) <span class="kw">in </span>joint_aabbs.iter().enumerate() {
+<a href=#641 id=641 data-nosnippet>641</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(ja) = ja <span class="kw">else </span>{ <span class="kw">continue </span>};
+<a href=#642 id=642 data-nosnippet>642</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(bone) = skeleton.get_bone(BoneId(i)) <span class="kw">else </span>{
+<a href=#643 id=643 data-nosnippet>643</a>                <span class="kw">continue</span>;
+<a href=#644 id=644 data-nosnippet>644</a>            };
+<a href=#645 id=645 data-nosnippet>645</a>            <span class="kw">let </span>skin = bone.world_transform * bone.inverse_bind_pose;
+<a href=#646 id=646 data-nosnippet>646</a>            <span class="kw">let </span>local = ja.to_aabb();
+<a href=#647 id=647 data-nosnippet>647</a>            <span class="kw">let </span>world = local.transformed(<span class="kw-2">&amp;</span>skin);
+<a href=#648 id=648 data-nosnippet>648</a>            acc = <span class="prelude-val">Some</span>(<span class="kw">match </span>acc {
+<a href=#649 id=649 data-nosnippet>649</a>                <span class="prelude-val">Some</span>(a) =&gt; a.merge(world),
+<a href=#650 id=650 data-nosnippet>650</a>                <span class="prelude-val">None </span>=&gt; world,
+<a href=#651 id=651 data-nosnippet>651</a>            });
+<a href=#652 id=652 data-nosnippet>652</a>        }
+<a href=#653 id=653 data-nosnippet>653</a>        acc
+<a href=#654 id=654 data-nosnippet>654</a>    }
+<a href=#655 id=655 data-nosnippet>655</a>}
+<a href=#656 id=656 data-nosnippet>656</a>
+<a href=#657 id=657 data-nosnippet>657</a><span class="attr">#[cfg(feature = <span class="string">"anim-blend"</span>)]
+<a href=#658 id=658 data-nosnippet>658</a></span><span class="kw">pub use </span>anim_blend_api::{
+<a href=#659 id=659 data-nosnippet>659</a>    AnimClip, BonePose, JointAabb, SkeletonKeyframe, blend_clips_onto_skeleton,
+<a href=#660 id=660 data-nosnippet>660</a>    compute_joint_aabbs, skinned_model_aabb,
+<a href=#661 id=661 data-nosnippet>661</a>};
+<a href=#662 id=662 data-nosnippet>662</a>
+<a href=#663 id=663 data-nosnippet>663</a><span class="attr">#[cfg(all(feature = <span class="string">"dsp"</span>, feature = <span class="string">"anim-blend"</span>))]
+<a href=#664 id=664 data-nosnippet>664</a></span><span class="kw">impl </span>Bone {
+<a href=#665 id=665 data-nosnippet>665</a>    <span class="doccomment">/// Perform spherical linear interpolation (SLERP) between two bone rotations using `embedded-dsp` quaternions.
+<a href=#666 id=666 data-nosnippet>666</a>    </span><span class="kw">pub fn </span>interpolate_rotation_dsp(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target_rotation: UnitQuaternion&lt;f32&gt;, t: f32) {
+<a href=#667 id=667 data-nosnippet>667</a>        <span class="self">self</span>.slerp_rotation(target_rotation, t);
+<a href=#668 id=668 data-nosnippet>668</a>    }
+<a href=#669 id=669 data-nosnippet>669</a>}
+<a href=#670 id=670 data-nosnippet>670</a>
+<a href=#671 id=671 data-nosnippet>671</a><span class="attr">#[cfg(all(feature = <span class="string">"dsp"</span>, not(feature = <span class="string">"anim-blend"</span>)))]
+<a href=#672 id=672 data-nosnippet>672</a></span><span class="kw">impl </span>Bone {
+<a href=#673 id=673 data-nosnippet>673</a>    <span class="doccomment">/// Perform spherical linear interpolation (SLERP) between two bone rotations using `embedded-dsp` quaternions.
+<a href=#674 id=674 data-nosnippet>674</a>    </span><span class="kw">pub fn </span>interpolate_rotation_dsp(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target_rotation: UnitQuaternion&lt;f32&gt;, t: f32) {
+<a href=#675 id=675 data-nosnippet>675</a>        <span class="kw">let </span>q1 = [
+<a href=#676 id=676 data-nosnippet>676</a>            <span class="self">self</span>.rotation.w,
+<a href=#677 id=677 data-nosnippet>677</a>            <span class="self">self</span>.rotation.i,
+<a href=#678 id=678 data-nosnippet>678</a>            <span class="self">self</span>.rotation.j,
+<a href=#679 id=679 data-nosnippet>679</a>            <span class="self">self</span>.rotation.k,
+<a href=#680 id=680 data-nosnippet>680</a>        ];
+<a href=#681 id=681 data-nosnippet>681</a>        <span class="kw">let </span>q2 = [
+<a href=#682 id=682 data-nosnippet>682</a>            target_rotation.w,
+<a href=#683 id=683 data-nosnippet>683</a>            target_rotation.i,
+<a href=#684 id=684 data-nosnippet>684</a>            target_rotation.j,
+<a href=#685 id=685 data-nosnippet>685</a>            target_rotation.k,
+<a href=#686 id=686 data-nosnippet>686</a>        ];
+<a href=#687 id=687 data-nosnippet>687</a>        <span class="kw">let </span>dot = q1[<span class="number">0</span>] * q2[<span class="number">0</span>] + q1[<span class="number">1</span>] * q2[<span class="number">1</span>] + q1[<span class="number">2</span>] * q2[<span class="number">2</span>] + q1[<span class="number">3</span>] * q2[<span class="number">3</span>];
+<a href=#688 id=688 data-nosnippet>688</a>        <span class="kw">let </span>q2_adj = <span class="kw">if </span>dot &lt; <span class="number">0.0 </span>{
+<a href=#689 id=689 data-nosnippet>689</a>            [-q2[<span class="number">0</span>], -q2[<span class="number">1</span>], -q2[<span class="number">2</span>], -q2[<span class="number">3</span>]]
+<a href=#690 id=690 data-nosnippet>690</a>        } <span class="kw">else </span>{
+<a href=#691 id=691 data-nosnippet>691</a>            q2
+<a href=#692 id=692 data-nosnippet>692</a>        };
+<a href=#693 id=693 data-nosnippet>693</a>        <span class="kw">let </span>t_clamped = t.clamp(<span class="number">0.0</span>, <span class="number">1.0</span>);
+<a href=#694 id=694 data-nosnippet>694</a>        <span class="kw">let </span><span class="kw-2">mut </span>interpolated = [
+<a href=#695 id=695 data-nosnippet>695</a>            q1[<span class="number">0</span>] + (q2_adj[<span class="number">0</span>] - q1[<span class="number">0</span>]) * t_clamped,
+<a href=#696 id=696 data-nosnippet>696</a>            q1[<span class="number">1</span>] + (q2_adj[<span class="number">1</span>] - q1[<span class="number">1</span>]) * t_clamped,
+<a href=#697 id=697 data-nosnippet>697</a>            q1[<span class="number">2</span>] + (q2_adj[<span class="number">2</span>] - q1[<span class="number">2</span>]) * t_clamped,
+<a href=#698 id=698 data-nosnippet>698</a>            q1[<span class="number">3</span>] + (q2_adj[<span class="number">3</span>] - q1[<span class="number">3</span>]) * t_clamped,
+<a href=#699 id=699 data-nosnippet>699</a>        ];
+<a href=#700 id=700 data-nosnippet>700</a>        <span class="kw">let _ </span>= embedded_dsp::quaternion_normalize_f32(<span class="kw-2">&amp;mut </span>interpolated);
+<a href=#701 id=701 data-nosnippet>701</a>
+<a href=#702 id=702 data-nosnippet>702</a>        <span class="self">self</span>.rotation = UnitQuaternion::new_normalize(nalgebra::Quaternion::new(
+<a href=#703 id=703 data-nosnippet>703</a>            interpolated[<span class="number">0</span>],
+<a href=#704 id=704 data-nosnippet>704</a>            interpolated[<span class="number">1</span>],
+<a href=#705 id=705 data-nosnippet>705</a>            interpolated[<span class="number">2</span>],
+<a href=#706 id=706 data-nosnippet>706</a>            interpolated[<span class="number">3</span>],
+<a href=#707 id=707 data-nosnippet>707</a>        ));
+<a href=#708 id=708 data-nosnippet>708</a>        <span class="self">self</span>.update_local_transform();
+<a href=#709 id=709 data-nosnippet>709</a>    }
+<a href=#710 id=710 data-nosnippet>710</a>}
 <a href=#711 id=711 data-nosnippet>711</a>
-<a href=#712 id=712 data-nosnippet>712</a>    <span class="attr">#[test]
-<a href=#713 id=713 data-nosnippet>713</a>    </span><span class="kw">fn </span>test_bone_creation() {
-<a href=#714 id=714 data-nosnippet>714</a>        <span class="kw">let </span>bone = Bone::new(<span class="string">"test_bone"</span>);
-<a href=#715 id=715 data-nosnippet>715</a>        <span class="macro">assert_eq!</span>(bone.name.as_str(), <span class="string">"test_bone"</span>);
-<a href=#716 id=716 data-nosnippet>716</a>        <span class="macro">assert_eq!</span>(bone.position, Vector3::zeros());
-<a href=#717 id=717 data-nosnippet>717</a>        <span class="macro">assert_eq!</span>(bone.parent, <span class="prelude-val">None</span>);
-<a href=#718 id=718 data-nosnippet>718</a>    }
-<a href=#719 id=719 data-nosnippet>719</a>
-<a href=#720 id=720 data-nosnippet>720</a>    <span class="attr">#[test]
-<a href=#721 id=721 data-nosnippet>721</a>    </span><span class="kw">fn </span>test_skeleton_add_bone() {
-<a href=#722 id=722 data-nosnippet>722</a>        <span class="kw">let </span><span class="kw-2">mut </span>skeleton = Skeleton::&lt;<span class="number">4</span>&gt;::new();
+<a href=#712 id=712 data-nosnippet>712</a><span class="attr">#[cfg(test)]
+<a href=#713 id=713 data-nosnippet>713</a></span><span class="kw">mod </span>tests {
+<a href=#714 id=714 data-nosnippet>714</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#715 id=715 data-nosnippet>715</a>
+<a href=#716 id=716 data-nosnippet>716</a>    <span class="attr">#[test]
+<a href=#717 id=717 data-nosnippet>717</a>    </span><span class="kw">fn </span>test_bone_creation() {
+<a href=#718 id=718 data-nosnippet>718</a>        <span class="kw">let </span>bone = Bone::new(<span class="string">"test_bone"</span>);
+<a href=#719 id=719 data-nosnippet>719</a>        <span class="macro">assert_eq!</span>(bone.name.as_str(), <span class="string">"test_bone"</span>);
+<a href=#720 id=720 data-nosnippet>720</a>        <span class="macro">assert_eq!</span>(bone.position, Vector3::zeros());
+<a href=#721 id=721 data-nosnippet>721</a>        <span class="macro">assert_eq!</span>(bone.parent, <span class="prelude-val">None</span>);
+<a href=#722 id=722 data-nosnippet>722</a>    }
 <a href=#723 id=723 data-nosnippet>723</a>
-<a href=#724 id=724 data-nosnippet>724</a>        <span class="kw">let </span>root = skeleton.add_bone(Bone::new(<span class="string">"root"</span>), <span class="prelude-val">None</span>);
-<a href=#725 id=725 data-nosnippet>725</a>        <span class="macro">assert!</span>(root.is_ok());
-<a href=#726 id=726 data-nosnippet>726</a>
-<a href=#727 id=727 data-nosnippet>727</a>        <span class="kw">let </span>root_id = root.unwrap();
-<a href=#728 id=728 data-nosnippet>728</a>        <span class="kw">let </span>child = skeleton.add_bone(Bone::new(<span class="string">"child"</span>), <span class="prelude-val">Some</span>(root_id));
-<a href=#729 id=729 data-nosnippet>729</a>        <span class="macro">assert!</span>(child.is_ok());
+<a href=#724 id=724 data-nosnippet>724</a>    <span class="attr">#[test]
+<a href=#725 id=725 data-nosnippet>725</a>    </span><span class="kw">fn </span>test_skeleton_add_bone() {
+<a href=#726 id=726 data-nosnippet>726</a>        <span class="kw">let </span><span class="kw-2">mut </span>skeleton = Skeleton::&lt;<span class="number">4</span>&gt;::new();
+<a href=#727 id=727 data-nosnippet>727</a>
+<a href=#728 id=728 data-nosnippet>728</a>        <span class="kw">let </span>root = skeleton.add_bone(Bone::new(<span class="string">"root"</span>), <span class="prelude-val">None</span>);
+<a href=#729 id=729 data-nosnippet>729</a>        <span class="macro">assert!</span>(root.is_ok());
 <a href=#730 id=730 data-nosnippet>730</a>
-<a href=#731 id=731 data-nosnippet>731</a>        <span class="macro">assert_eq!</span>(skeleton.bones.len(), <span class="number">2</span>);
-<a href=#732 id=732 data-nosnippet>732</a>    }
-<a href=#733 id=733 data-nosnippet>733</a>
-<a href=#734 id=734 data-nosnippet>734</a>    <span class="attr">#[test]
-<a href=#735 id=735 data-nosnippet>735</a>    </span><span class="kw">fn </span>test_hierarchy_transforms() {
-<a href=#736 id=736 data-nosnippet>736</a>        <span class="kw">let </span><span class="kw-2">mut </span>skeleton = Skeleton::&lt;<span class="number">4</span>&gt;::new();
+<a href=#731 id=731 data-nosnippet>731</a>        <span class="kw">let </span>root_id = root.unwrap();
+<a href=#732 id=732 data-nosnippet>732</a>        <span class="kw">let </span>child = skeleton.add_bone(Bone::new(<span class="string">"child"</span>), <span class="prelude-val">Some</span>(root_id));
+<a href=#733 id=733 data-nosnippet>733</a>        <span class="macro">assert!</span>(child.is_ok());
+<a href=#734 id=734 data-nosnippet>734</a>
+<a href=#735 id=735 data-nosnippet>735</a>        <span class="macro">assert_eq!</span>(skeleton.bones.len(), <span class="number">2</span>);
+<a href=#736 id=736 data-nosnippet>736</a>    }
 <a href=#737 id=737 data-nosnippet>737</a>
-<a href=#738 id=738 data-nosnippet>738</a>        <span class="comment">// Root at origin
-<a href=#739 id=739 data-nosnippet>739</a>        </span><span class="kw">let </span>root = skeleton.add_bone(Bone::new(<span class="string">"root"</span>), <span class="prelude-val">None</span>).unwrap();
-<a href=#740 id=740 data-nosnippet>740</a>
-<a href=#741 id=741 data-nosnippet>741</a>        <span class="comment">// Child offset by (1, 0, 0)
-<a href=#742 id=742 data-nosnippet>742</a>        </span><span class="kw">let </span>child = skeleton
-<a href=#743 id=743 data-nosnippet>743</a>            .add_bone(
-<a href=#744 id=744 data-nosnippet>744</a>                Bone::new(<span class="string">"child"</span>).with_position(Vector3::new(<span class="number">1.0</span>, <span class="number">0.0</span>, <span class="number">0.0</span>)),
-<a href=#745 id=745 data-nosnippet>745</a>                <span class="prelude-val">Some</span>(root),
-<a href=#746 id=746 data-nosnippet>746</a>            )
-<a href=#747 id=747 data-nosnippet>747</a>            .unwrap();
-<a href=#748 id=748 data-nosnippet>748</a>
-<a href=#749 id=749 data-nosnippet>749</a>        skeleton.update_transforms();
-<a href=#750 id=750 data-nosnippet>750</a>
-<a href=#751 id=751 data-nosnippet>751</a>        <span class="comment">// Child's world position should be (1, 0, 0)
-<a href=#752 id=752 data-nosnippet>752</a>        </span><span class="kw">let </span>child_bone = skeleton.get_bone(child).unwrap();
-<a href=#753 id=753 data-nosnippet>753</a>        <span class="kw">let </span>world_pos = child_bone.world_transform.column(<span class="number">3</span>);
-<a href=#754 id=754 data-nosnippet>754</a>        <span class="macro">assert!</span>((world_pos.x - <span class="number">1.0</span>).abs() &lt; <span class="number">0.001</span>);
-<a href=#755 id=755 data-nosnippet>755</a>        <span class="macro">assert!</span>(world_pos.y.abs() &lt; <span class="number">0.001</span>);
-<a href=#756 id=756 data-nosnippet>756</a>        <span class="macro">assert!</span>(world_pos.z.abs() &lt; <span class="number">0.001</span>);
-<a href=#757 id=757 data-nosnippet>757</a>    }
-<a href=#758 id=758 data-nosnippet>758</a>
-<a href=#759 id=759 data-nosnippet>759</a>    <span class="attr">#[test]
-<a href=#760 id=760 data-nosnippet>760</a>    </span><span class="kw">fn </span>test_vertex_skinning_single_bone() {
-<a href=#761 id=761 data-nosnippet>761</a>        <span class="kw">let </span>skinning = VertexSkinning::single_bone(<span class="number">0</span>);
-<a href=#762 id=762 data-nosnippet>762</a>        <span class="macro">assert_eq!</span>(skinning.num_influences, <span class="number">1</span>);
-<a href=#763 id=763 data-nosnippet>763</a>        <span class="macro">assert_eq!</span>(skinning.bone_weights[<span class="number">0</span>], <span class="number">1.0</span>);
-<a href=#764 id=764 data-nosnippet>764</a>    }
-<a href=#765 id=765 data-nosnippet>765</a>
-<a href=#766 id=766 data-nosnippet>766</a>    <span class="attr">#[test]
-<a href=#767 id=767 data-nosnippet>767</a>    </span><span class="kw">fn </span>test_vertex_skinning_two_bones() {
-<a href=#768 id=768 data-nosnippet>768</a>        <span class="kw">let </span>skinning = VertexSkinning::two_bones(<span class="number">0</span>, <span class="number">0.7</span>, <span class="number">1</span>, <span class="number">0.3</span>);
-<a href=#769 id=769 data-nosnippet>769</a>        <span class="macro">assert_eq!</span>(skinning.num_influences, <span class="number">2</span>);
-<a href=#770 id=770 data-nosnippet>770</a>        <span class="macro">assert_eq!</span>(skinning.bone_weights[<span class="number">0</span>], <span class="number">0.7</span>);
-<a href=#771 id=771 data-nosnippet>771</a>        <span class="macro">assert_eq!</span>(skinning.bone_weights[<span class="number">1</span>], <span class="number">0.3</span>);
-<a href=#772 id=772 data-nosnippet>772</a>    }
-<a href=#773 id=773 data-nosnippet>773</a>
-<a href=#774 id=774 data-nosnippet>774</a>    <span class="attr">#[test]
-<a href=#775 id=775 data-nosnippet>775</a>    </span><span class="kw">fn </span>test_bone_builders_and_setters() {
-<a href=#776 id=776 data-nosnippet>776</a>        <span class="kw">let </span>rot = UnitQuaternion::from_euler_angles(<span class="number">0.1</span>, <span class="number">0.2</span>, <span class="number">0.3</span>);
-<a href=#777 id=777 data-nosnippet>777</a>        <span class="kw">let </span>scale = Vector3::new(<span class="number">2.0</span>, <span class="number">2.0</span>, <span class="number">2.0</span>);
-<a href=#778 id=778 data-nosnippet>778</a>        <span class="kw">let </span><span class="kw-2">mut </span>bone = Bone::new(<span class="string">"hand"</span>).with_rotation(rot).with_scale(scale);
-<a href=#779 id=779 data-nosnippet>779</a>        <span class="macro">assert_eq!</span>(bone.scale, scale);
-<a href=#780 id=780 data-nosnippet>780</a>
-<a href=#781 id=781 data-nosnippet>781</a>        bone.set_position(Vector3::new(<span class="number">5.0</span>, <span class="number">1.0</span>, -<span class="number">2.0</span>));
-<a href=#782 id=782 data-nosnippet>782</a>        <span class="macro">assert_eq!</span>(bone.position, Vector3::new(<span class="number">5.0</span>, <span class="number">1.0</span>, -<span class="number">2.0</span>));
-<a href=#783 id=783 data-nosnippet>783</a>
-<a href=#784 id=784 data-nosnippet>784</a>        <span class="kw">let </span>rot2 = UnitQuaternion::identity();
-<a href=#785 id=785 data-nosnippet>785</a>        bone.set_rotation(rot2);
-<a href=#786 id=786 data-nosnippet>786</a>        <span class="macro">assert_eq!</span>(bone.rotation, rot2);
-<a href=#787 id=787 data-nosnippet>787</a>    }
-<a href=#788 id=788 data-nosnippet>788</a>
-<a href=#789 id=789 data-nosnippet>789</a>    <span class="attr">#[test]
-<a href=#790 id=790 data-nosnippet>790</a>    </span><span class="kw">fn </span>test_skeleton_capacity_and_lookup() {
-<a href=#791 id=791 data-nosnippet>791</a>        <span class="kw">let </span><span class="kw-2">mut </span>skel = Skeleton::&lt;<span class="number">2</span>&gt;::new();
-<a href=#792 id=792 data-nosnippet>792</a>        <span class="macro">assert!</span>(skel.get_bone(BoneId(<span class="number">0</span>)).is_none());
-<a href=#793 id=793 data-nosnippet>793</a>        <span class="macro">assert!</span>(skel.get_bone_mut(BoneId(<span class="number">0</span>)).is_none());
-<a href=#794 id=794 data-nosnippet>794</a>
-<a href=#795 id=795 data-nosnippet>795</a>        <span class="kw">let </span>b0 = skel.add_bone(Bone::new(<span class="string">"b0"</span>), <span class="prelude-val">None</span>).unwrap();
-<a href=#796 id=796 data-nosnippet>796</a>        <span class="kw">let </span>b1 = skel.add_bone(Bone::new(<span class="string">"b1"</span>), <span class="prelude-val">Some</span>(b0)).unwrap();
-<a href=#797 id=797 data-nosnippet>797</a>        <span class="macro">assert!</span>(skel.add_bone(Bone::new(<span class="string">"b2"</span>), <span class="prelude-val">None</span>).is_err());
+<a href=#738 id=738 data-nosnippet>738</a>    <span class="attr">#[test]
+<a href=#739 id=739 data-nosnippet>739</a>    </span><span class="kw">fn </span>test_hierarchy_transforms() {
+<a href=#740 id=740 data-nosnippet>740</a>        <span class="kw">let </span><span class="kw-2">mut </span>skeleton = Skeleton::&lt;<span class="number">4</span>&gt;::new();
+<a href=#741 id=741 data-nosnippet>741</a>
+<a href=#742 id=742 data-nosnippet>742</a>        <span class="comment">// Root at origin
+<a href=#743 id=743 data-nosnippet>743</a>        </span><span class="kw">let </span>root = skeleton.add_bone(Bone::new(<span class="string">"root"</span>), <span class="prelude-val">None</span>).unwrap();
+<a href=#744 id=744 data-nosnippet>744</a>
+<a href=#745 id=745 data-nosnippet>745</a>        <span class="comment">// Child offset by (1, 0, 0)
+<a href=#746 id=746 data-nosnippet>746</a>        </span><span class="kw">let </span>child = skeleton
+<a href=#747 id=747 data-nosnippet>747</a>            .add_bone(
+<a href=#748 id=748 data-nosnippet>748</a>                Bone::new(<span class="string">"child"</span>).with_position(Vector3::new(<span class="number">1.0</span>, <span class="number">0.0</span>, <span class="number">0.0</span>)),
+<a href=#749 id=749 data-nosnippet>749</a>                <span class="prelude-val">Some</span>(root),
+<a href=#750 id=750 data-nosnippet>750</a>            )
+<a href=#751 id=751 data-nosnippet>751</a>            .unwrap();
+<a href=#752 id=752 data-nosnippet>752</a>
+<a href=#753 id=753 data-nosnippet>753</a>        skeleton.update_transforms();
+<a href=#754 id=754 data-nosnippet>754</a>
+<a href=#755 id=755 data-nosnippet>755</a>        <span class="comment">// Child's world position should be (1, 0, 0)
+<a href=#756 id=756 data-nosnippet>756</a>        </span><span class="kw">let </span>child_bone = skeleton.get_bone(child).unwrap();
+<a href=#757 id=757 data-nosnippet>757</a>        <span class="kw">let </span>world_pos = child_bone.world_transform.column(<span class="number">3</span>);
+<a href=#758 id=758 data-nosnippet>758</a>        <span class="macro">assert!</span>((world_pos.x - <span class="number">1.0</span>).abs() &lt; <span class="number">0.001</span>);
+<a href=#759 id=759 data-nosnippet>759</a>        <span class="macro">assert!</span>(world_pos.y.abs() &lt; <span class="number">0.001</span>);
+<a href=#760 id=760 data-nosnippet>760</a>        <span class="macro">assert!</span>(world_pos.z.abs() &lt; <span class="number">0.001</span>);
+<a href=#761 id=761 data-nosnippet>761</a>    }
+<a href=#762 id=762 data-nosnippet>762</a>
+<a href=#763 id=763 data-nosnippet>763</a>    <span class="attr">#[test]
+<a href=#764 id=764 data-nosnippet>764</a>    </span><span class="kw">fn </span>test_vertex_skinning_single_bone() {
+<a href=#765 id=765 data-nosnippet>765</a>        <span class="kw">let </span>skinning = VertexSkinning::single_bone(<span class="number">0</span>);
+<a href=#766 id=766 data-nosnippet>766</a>        <span class="macro">assert_eq!</span>(skinning.num_influences, <span class="number">1</span>);
+<a href=#767 id=767 data-nosnippet>767</a>        <span class="macro">assert_eq!</span>(skinning.bone_weights[<span class="number">0</span>], <span class="number">1.0</span>);
+<a href=#768 id=768 data-nosnippet>768</a>    }
+<a href=#769 id=769 data-nosnippet>769</a>
+<a href=#770 id=770 data-nosnippet>770</a>    <span class="attr">#[test]
+<a href=#771 id=771 data-nosnippet>771</a>    </span><span class="kw">fn </span>test_vertex_skinning_two_bones() {
+<a href=#772 id=772 data-nosnippet>772</a>        <span class="kw">let </span>skinning = VertexSkinning::two_bones(<span class="number">0</span>, <span class="number">0.7</span>, <span class="number">1</span>, <span class="number">0.3</span>);
+<a href=#773 id=773 data-nosnippet>773</a>        <span class="macro">assert_eq!</span>(skinning.num_influences, <span class="number">2</span>);
+<a href=#774 id=774 data-nosnippet>774</a>        <span class="macro">assert_eq!</span>(skinning.bone_weights[<span class="number">0</span>], <span class="number">0.7</span>);
+<a href=#775 id=775 data-nosnippet>775</a>        <span class="macro">assert_eq!</span>(skinning.bone_weights[<span class="number">1</span>], <span class="number">0.3</span>);
+<a href=#776 id=776 data-nosnippet>776</a>    }
+<a href=#777 id=777 data-nosnippet>777</a>
+<a href=#778 id=778 data-nosnippet>778</a>    <span class="attr">#[test]
+<a href=#779 id=779 data-nosnippet>779</a>    </span><span class="kw">fn </span>test_bone_builders_and_setters() {
+<a href=#780 id=780 data-nosnippet>780</a>        <span class="kw">let </span>rot = UnitQuaternion::from_euler_angles(<span class="number">0.1</span>, <span class="number">0.2</span>, <span class="number">0.3</span>);
+<a href=#781 id=781 data-nosnippet>781</a>        <span class="kw">let </span>scale = Vector3::new(<span class="number">2.0</span>, <span class="number">2.0</span>, <span class="number">2.0</span>);
+<a href=#782 id=782 data-nosnippet>782</a>        <span class="kw">let </span><span class="kw-2">mut </span>bone = Bone::new(<span class="string">"hand"</span>).with_rotation(rot).with_scale(scale);
+<a href=#783 id=783 data-nosnippet>783</a>        <span class="macro">assert_eq!</span>(bone.scale, scale);
+<a href=#784 id=784 data-nosnippet>784</a>
+<a href=#785 id=785 data-nosnippet>785</a>        bone.set_position(Vector3::new(<span class="number">5.0</span>, <span class="number">1.0</span>, -<span class="number">2.0</span>));
+<a href=#786 id=786 data-nosnippet>786</a>        <span class="macro">assert_eq!</span>(bone.position, Vector3::new(<span class="number">5.0</span>, <span class="number">1.0</span>, -<span class="number">2.0</span>));
+<a href=#787 id=787 data-nosnippet>787</a>
+<a href=#788 id=788 data-nosnippet>788</a>        <span class="kw">let </span>rot2 = UnitQuaternion::identity();
+<a href=#789 id=789 data-nosnippet>789</a>        bone.set_rotation(rot2);
+<a href=#790 id=790 data-nosnippet>790</a>        <span class="macro">assert_eq!</span>(bone.rotation, rot2);
+<a href=#791 id=791 data-nosnippet>791</a>    }
+<a href=#792 id=792 data-nosnippet>792</a>
+<a href=#793 id=793 data-nosnippet>793</a>    <span class="attr">#[test]
+<a href=#794 id=794 data-nosnippet>794</a>    </span><span class="kw">fn </span>test_skeleton_capacity_and_lookup() {
+<a href=#795 id=795 data-nosnippet>795</a>        <span class="kw">let </span><span class="kw-2">mut </span>skel = Skeleton::&lt;<span class="number">2</span>&gt;::new();
+<a href=#796 id=796 data-nosnippet>796</a>        <span class="macro">assert!</span>(skel.get_bone(BoneId(<span class="number">0</span>)).is_none());
+<a href=#797 id=797 data-nosnippet>797</a>        <span class="macro">assert!</span>(skel.get_bone_mut(BoneId(<span class="number">0</span>)).is_none());
 <a href=#798 id=798 data-nosnippet>798</a>
-<a href=#799 id=799 data-nosnippet>799</a>        <span class="macro">assert!</span>(skel.get_bone(b0).is_some());
-<a href=#800 id=800 data-nosnippet>800</a>        <span class="macro">assert!</span>(skel.get_bone_mut(b1).is_some());
-<a href=#801 id=801 data-nosnippet>801</a>    }
+<a href=#799 id=799 data-nosnippet>799</a>        <span class="kw">let </span>b0 = skel.add_bone(Bone::new(<span class="string">"b0"</span>), <span class="prelude-val">None</span>).unwrap();
+<a href=#800 id=800 data-nosnippet>800</a>        <span class="kw">let </span>b1 = skel.add_bone(Bone::new(<span class="string">"b1"</span>), <span class="prelude-val">Some</span>(b0)).unwrap();
+<a href=#801 id=801 data-nosnippet>801</a>        <span class="macro">assert!</span>(skel.add_bone(Bone::new(<span class="string">"b2"</span>), <span class="prelude-val">None</span>).is_err());
 <a href=#802 id=802 data-nosnippet>802</a>
-<a href=#803 id=803 data-nosnippet>803</a>    <span class="attr">#[test]
-<a href=#804 id=804 data-nosnippet>804</a>    </span><span class="kw">fn </span>test_skinning_and_normals() {
-<a href=#805 id=805 data-nosnippet>805</a>        <span class="kw">let </span><span class="kw-2">mut </span>skel = Skeleton::&lt;<span class="number">2</span>&gt;::new();
-<a href=#806 id=806 data-nosnippet>806</a>        <span class="kw">let </span>b0 = skel.add_bone(Bone::new(<span class="string">"root"</span>), <span class="prelude-val">None</span>).unwrap();
-<a href=#807 id=807 data-nosnippet>807</a>        <span class="kw">let </span>b1 = skel
-<a href=#808 id=808 data-nosnippet>808</a>            .add_bone(
-<a href=#809 id=809 data-nosnippet>809</a>                Bone::new(<span class="string">"arm"</span>).with_position(Vector3::new(<span class="number">0.0</span>, <span class="number">2.0</span>, <span class="number">0.0</span>)),
-<a href=#810 id=810 data-nosnippet>810</a>                <span class="prelude-val">Some</span>(b0),
-<a href=#811 id=811 data-nosnippet>811</a>            )
-<a href=#812 id=812 data-nosnippet>812</a>            .unwrap();
-<a href=#813 id=813 data-nosnippet>813</a>
-<a href=#814 id=814 data-nosnippet>814</a>        skel.update_transforms();
-<a href=#815 id=815 data-nosnippet>815</a>        skel.compute_inverse_bind_poses();
-<a href=#816 id=816 data-nosnippet>816</a>
-<a href=#817 id=817 data-nosnippet>817</a>        <span class="comment">// Move the arm bone by +1 on X
-<a href=#818 id=818 data-nosnippet>818</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(arm) = skel.get_bone_mut(b1) {
-<a href=#819 id=819 data-nosnippet>819</a>            arm.set_position(Vector3::new(<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">0.0</span>));
-<a href=#820 id=820 data-nosnippet>820</a>        }
-<a href=#821 id=821 data-nosnippet>821</a>        skel.update_transforms();
-<a href=#822 id=822 data-nosnippet>822</a>
-<a href=#823 id=823 data-nosnippet>823</a>        <span class="kw">let </span><span class="kw-2">mut </span>skin_data = SkinningData::default();
-<a href=#824 id=824 data-nosnippet>824</a>        <span class="kw">let _ </span>= skin_data.add_vertex(VertexSkinning::single_bone(b1.<span class="number">0</span>));
-<a href=#825 id=825 data-nosnippet>825</a>        <span class="kw">let _ </span>= skin_data.add_vertex(VertexSkinning::two_bones(b0.<span class="number">0</span>, <span class="number">0.5</span>, b1.<span class="number">0</span>, <span class="number">0.5</span>));
+<a href=#803 id=803 data-nosnippet>803</a>        <span class="macro">assert!</span>(skel.get_bone(b0).is_some());
+<a href=#804 id=804 data-nosnippet>804</a>        <span class="macro">assert!</span>(skel.get_bone_mut(b1).is_some());
+<a href=#805 id=805 data-nosnippet>805</a>    }
+<a href=#806 id=806 data-nosnippet>806</a>
+<a href=#807 id=807 data-nosnippet>807</a>    <span class="attr">#[test]
+<a href=#808 id=808 data-nosnippet>808</a>    </span><span class="kw">fn </span>test_skinning_and_normals() {
+<a href=#809 id=809 data-nosnippet>809</a>        <span class="kw">let </span><span class="kw-2">mut </span>skel = Skeleton::&lt;<span class="number">2</span>&gt;::new();
+<a href=#810 id=810 data-nosnippet>810</a>        <span class="kw">let </span>b0 = skel.add_bone(Bone::new(<span class="string">"root"</span>), <span class="prelude-val">None</span>).unwrap();
+<a href=#811 id=811 data-nosnippet>811</a>        <span class="kw">let </span>b1 = skel
+<a href=#812 id=812 data-nosnippet>812</a>            .add_bone(
+<a href=#813 id=813 data-nosnippet>813</a>                Bone::new(<span class="string">"arm"</span>).with_position(Vector3::new(<span class="number">0.0</span>, <span class="number">2.0</span>, <span class="number">0.0</span>)),
+<a href=#814 id=814 data-nosnippet>814</a>                <span class="prelude-val">Some</span>(b0),
+<a href=#815 id=815 data-nosnippet>815</a>            )
+<a href=#816 id=816 data-nosnippet>816</a>            .unwrap();
+<a href=#817 id=817 data-nosnippet>817</a>
+<a href=#818 id=818 data-nosnippet>818</a>        skel.update_transforms();
+<a href=#819 id=819 data-nosnippet>819</a>        skel.compute_inverse_bind_poses();
+<a href=#820 id=820 data-nosnippet>820</a>
+<a href=#821 id=821 data-nosnippet>821</a>        <span class="comment">// Move the arm bone by +1 on X
+<a href=#822 id=822 data-nosnippet>822</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(arm) = skel.get_bone_mut(b1) {
+<a href=#823 id=823 data-nosnippet>823</a>            arm.set_position(Vector3::new(<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">0.0</span>));
+<a href=#824 id=824 data-nosnippet>824</a>        }
+<a href=#825 id=825 data-nosnippet>825</a>        skel.update_transforms();
 <a href=#826 id=826 data-nosnippet>826</a>
-<a href=#827 id=827 data-nosnippet>827</a>        <span class="kw">let </span>source_v = [[<span class="number">0.0</span>, <span class="number">2.0</span>, <span class="number">0.0</span>], [<span class="number">0.0</span>, <span class="number">1.0</span>, <span class="number">0.0</span>]];
-<a href=#828 id=828 data-nosnippet>828</a>        <span class="kw">let </span><span class="kw-2">mut </span>out_v = [[<span class="number">0.0</span>; <span class="number">3</span>]; <span class="number">2</span>];
-<a href=#829 id=829 data-nosnippet>829</a>        <span class="kw">let </span>n_verts = apply_skinning(<span class="kw-2">&amp;</span>skel, <span class="kw-2">&amp;</span>skin_data, <span class="kw-2">&amp;</span>source_v, <span class="kw-2">&amp;mut </span>out_v);
-<a href=#830 id=830 data-nosnippet>830</a>        <span class="macro">assert_eq!</span>(n_verts, <span class="number">2</span>);
-<a href=#831 id=831 data-nosnippet>831</a>        <span class="comment">// Vertex 0 was at (0, 2, 0). Arm moved by +1 X relative to bind pose.
-<a href=#832 id=832 data-nosnippet>832</a>        </span><span class="macro">assert!</span>((out_v[<span class="number">0</span>][<span class="number">0</span>] - <span class="number">1.0</span>).abs() &lt; <span class="number">0.01</span>);
-<a href=#833 id=833 data-nosnippet>833</a>        <span class="macro">assert!</span>((out_v[<span class="number">0</span>][<span class="number">1</span>] - <span class="number">2.0</span>).abs() &lt; <span class="number">0.01</span>);
-<a href=#834 id=834 data-nosnippet>834</a>
-<a href=#835 id=835 data-nosnippet>835</a>        <span class="kw">let </span>source_n = [[<span class="number">0.0</span>, <span class="number">1.0</span>, <span class="number">0.0</span>], [<span class="number">1.0</span>, <span class="number">0.0</span>, <span class="number">0.0</span>]];
-<a href=#836 id=836 data-nosnippet>836</a>        <span class="kw">let </span><span class="kw-2">mut </span>out_n = [[<span class="number">0.0</span>; <span class="number">3</span>]; <span class="number">2</span>];
-<a href=#837 id=837 data-nosnippet>837</a>        <span class="kw">let </span>n_norms = apply_skinning_to_normals(<span class="kw-2">&amp;</span>skel, <span class="kw-2">&amp;</span>skin_data, <span class="kw-2">&amp;</span>source_n, <span class="kw-2">&amp;mut </span>out_n);
-<a href=#838 id=838 data-nosnippet>838</a>        <span class="macro">assert_eq!</span>(n_norms, <span class="number">2</span>);
-<a href=#839 id=839 data-nosnippet>839</a>        <span class="kw">let </span>len =
-<a href=#840 id=840 data-nosnippet>840</a>            (out_n[<span class="number">0</span>][<span class="number">0</span>] * out_n[<span class="number">0</span>][<span class="number">0</span>] + out_n[<span class="number">0</span>][<span class="number">1</span>] * out_n[<span class="number">0</span>][<span class="number">1</span>] + out_n[<span class="number">0</span>][<span class="number">2</span>] * out_n[<span class="number">0</span>][<span class="number">2</span>])
-<a href=#841 id=841 data-nosnippet>841</a>                .sqrt();
-<a href=#842 id=842 data-nosnippet>842</a>        <span class="macro">assert!</span>((len - <span class="number">1.0</span>).abs() &lt; <span class="number">0.01</span>);
-<a href=#843 id=843 data-nosnippet>843</a>    }
-<a href=#844 id=844 data-nosnippet>844</a>
-<a href=#845 id=845 data-nosnippet>845</a>    <span class="attr">#[cfg(feature = <span class="string">"anim-blend"</span>)]
-<a href=#846 id=846 data-nosnippet>846</a>    #[test]
-<a href=#847 id=847 data-nosnippet>847</a>    </span><span class="kw">fn </span>test_bone_pose_and_animation_blend() {
-<a href=#848 id=848 data-nosnippet>848</a>        <span class="kw">let </span>pose1 = BonePose::identity();
-<a href=#849 id=849 data-nosnippet>849</a>        <span class="kw">let </span><span class="kw-2">mut </span>pose2 = BonePose::identity();
-<a href=#850 id=850 data-nosnippet>850</a>        pose2.position = Vector3::new(<span class="number">2.0</span>, <span class="number">4.0</span>, <span class="number">6.0</span>);
-<a href=#851 id=851 data-nosnippet>851</a>
-<a href=#852 id=852 data-nosnippet>852</a>        <span class="kw">let </span>blended = BonePose::blend(pose1, pose2, <span class="number">0.5</span>);
-<a href=#853 id=853 data-nosnippet>853</a>        <span class="macro">assert_eq!</span>(blended.position, Vector3::new(<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>));
-<a href=#854 id=854 data-nosnippet>854</a>
-<a href=#855 id=855 data-nosnippet>855</a>        <span class="kw">let </span>kf1 = SkeletonKeyframe {
-<a href=#856 id=856 data-nosnippet>856</a>            time: <span class="number">0.0</span>,
-<a href=#857 id=857 data-nosnippet>857</a>            poses: <span class="kw-2">&amp;</span>[pose1],
-<a href=#858 id=858 data-nosnippet>858</a>        };
-<a href=#859 id=859 data-nosnippet>859</a>        <span class="kw">let </span>kf2 = SkeletonKeyframe {
-<a href=#860 id=860 data-nosnippet>860</a>            time: <span class="number">1.0</span>,
-<a href=#861 id=861 data-nosnippet>861</a>            poses: <span class="kw-2">&amp;</span>[pose2],
+<a href=#827 id=827 data-nosnippet>827</a>        <span class="kw">let </span><span class="kw-2">mut </span>skin_data = SkinningData::default();
+<a href=#828 id=828 data-nosnippet>828</a>        <span class="kw">let _ </span>= skin_data.add_vertex(VertexSkinning::single_bone(b1.<span class="number">0</span>));
+<a href=#829 id=829 data-nosnippet>829</a>        <span class="kw">let _ </span>= skin_data.add_vertex(VertexSkinning::two_bones(b0.<span class="number">0</span>, <span class="number">0.5</span>, b1.<span class="number">0</span>, <span class="number">0.5</span>));
+<a href=#830 id=830 data-nosnippet>830</a>
+<a href=#831 id=831 data-nosnippet>831</a>        <span class="kw">let </span>source_v = [[<span class="number">0.0</span>, <span class="number">2.0</span>, <span class="number">0.0</span>], [<span class="number">0.0</span>, <span class="number">1.0</span>, <span class="number">0.0</span>]];
+<a href=#832 id=832 data-nosnippet>832</a>        <span class="kw">let </span><span class="kw-2">mut </span>out_v = [[<span class="number">0.0</span>; <span class="number">3</span>]; <span class="number">2</span>];
+<a href=#833 id=833 data-nosnippet>833</a>        <span class="kw">let </span>n_verts = apply_skinning(<span class="kw-2">&amp;</span>skel, <span class="kw-2">&amp;</span>skin_data, <span class="kw-2">&amp;</span>source_v, <span class="kw-2">&amp;mut </span>out_v);
+<a href=#834 id=834 data-nosnippet>834</a>        <span class="macro">assert_eq!</span>(n_verts, <span class="number">2</span>);
+<a href=#835 id=835 data-nosnippet>835</a>        <span class="comment">// Vertex 0 was at (0, 2, 0). Arm moved by +1 X relative to bind pose.
+<a href=#836 id=836 data-nosnippet>836</a>        </span><span class="macro">assert!</span>((out_v[<span class="number">0</span>][<span class="number">0</span>] - <span class="number">1.0</span>).abs() &lt; <span class="number">0.01</span>);
+<a href=#837 id=837 data-nosnippet>837</a>        <span class="macro">assert!</span>((out_v[<span class="number">0</span>][<span class="number">1</span>] - <span class="number">2.0</span>).abs() &lt; <span class="number">0.01</span>);
+<a href=#838 id=838 data-nosnippet>838</a>
+<a href=#839 id=839 data-nosnippet>839</a>        <span class="kw">let </span>source_n = [[<span class="number">0.0</span>, <span class="number">1.0</span>, <span class="number">0.0</span>], [<span class="number">1.0</span>, <span class="number">0.0</span>, <span class="number">0.0</span>]];
+<a href=#840 id=840 data-nosnippet>840</a>        <span class="kw">let </span><span class="kw-2">mut </span>out_n = [[<span class="number">0.0</span>; <span class="number">3</span>]; <span class="number">2</span>];
+<a href=#841 id=841 data-nosnippet>841</a>        <span class="kw">let </span>n_norms = apply_skinning_to_normals(<span class="kw-2">&amp;</span>skel, <span class="kw-2">&amp;</span>skin_data, <span class="kw-2">&amp;</span>source_n, <span class="kw-2">&amp;mut </span>out_n);
+<a href=#842 id=842 data-nosnippet>842</a>        <span class="macro">assert_eq!</span>(n_norms, <span class="number">2</span>);
+<a href=#843 id=843 data-nosnippet>843</a>        <span class="kw">let </span>len =
+<a href=#844 id=844 data-nosnippet>844</a>            (out_n[<span class="number">0</span>][<span class="number">0</span>] * out_n[<span class="number">0</span>][<span class="number">0</span>] + out_n[<span class="number">0</span>][<span class="number">1</span>] * out_n[<span class="number">0</span>][<span class="number">1</span>] + out_n[<span class="number">0</span>][<span class="number">2</span>] * out_n[<span class="number">0</span>][<span class="number">2</span>])
+<a href=#845 id=845 data-nosnippet>845</a>                .sqrt();
+<a href=#846 id=846 data-nosnippet>846</a>        <span class="macro">assert!</span>((len - <span class="number">1.0</span>).abs() &lt; <span class="number">0.01</span>);
+<a href=#847 id=847 data-nosnippet>847</a>    }
+<a href=#848 id=848 data-nosnippet>848</a>
+<a href=#849 id=849 data-nosnippet>849</a>    <span class="attr">#[cfg(feature = <span class="string">"anim-blend"</span>)]
+<a href=#850 id=850 data-nosnippet>850</a>    #[test]
+<a href=#851 id=851 data-nosnippet>851</a>    </span><span class="kw">fn </span>test_bone_pose_and_animation_blend() {
+<a href=#852 id=852 data-nosnippet>852</a>        <span class="kw">let </span>pose1 = BonePose::identity();
+<a href=#853 id=853 data-nosnippet>853</a>        <span class="kw">let </span><span class="kw-2">mut </span>pose2 = BonePose::identity();
+<a href=#854 id=854 data-nosnippet>854</a>        pose2.position = Vector3::new(<span class="number">2.0</span>, <span class="number">4.0</span>, <span class="number">6.0</span>);
+<a href=#855 id=855 data-nosnippet>855</a>
+<a href=#856 id=856 data-nosnippet>856</a>        <span class="kw">let </span>blended = BonePose::blend(pose1, pose2, <span class="number">0.5</span>);
+<a href=#857 id=857 data-nosnippet>857</a>        <span class="macro">assert_eq!</span>(blended.position, Vector3::new(<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>));
+<a href=#858 id=858 data-nosnippet>858</a>
+<a href=#859 id=859 data-nosnippet>859</a>        <span class="kw">let </span>kf1 = SkeletonKeyframe {
+<a href=#860 id=860 data-nosnippet>860</a>            time: <span class="number">0.0</span>,
+<a href=#861 id=861 data-nosnippet>861</a>            poses: <span class="kw-2">&amp;</span>[pose1],
 <a href=#862 id=862 data-nosnippet>862</a>        };
-<a href=#863 id=863 data-nosnippet>863</a>        <span class="kw">let </span>keyframes = [kf1, kf2];
-<a href=#864 id=864 data-nosnippet>864</a>        <span class="kw">let </span>clip = AnimClip::new(<span class="kw-2">&amp;</span>keyframes, <span class="bool-val">true</span>);
-<a href=#865 id=865 data-nosnippet>865</a>        <span class="macro">assert_eq!</span>(clip.duration(), <span class="number">1.0</span>);
-<a href=#866 id=866 data-nosnippet>866</a>
-<a href=#867 id=867 data-nosnippet>867</a>        <span class="kw">let </span>sampled = clip.sample_bone(<span class="number">0.5</span>, <span class="number">0</span>).unwrap();
-<a href=#868 id=868 data-nosnippet>868</a>        <span class="macro">assert!</span>((sampled.position.x - <span class="number">1.0</span>).abs() &lt; <span class="number">0.01</span>);
-<a href=#869 id=869 data-nosnippet>869</a>
-<a href=#870 id=870 data-nosnippet>870</a>        <span class="kw">let </span><span class="kw-2">mut </span>skel = Skeleton::&lt;<span class="number">2</span>&gt;::new();
-<a href=#871 id=871 data-nosnippet>871</a>        skel.add_bone(Bone::new(<span class="string">"root"</span>), <span class="prelude-val">None</span>).unwrap();
-<a href=#872 id=872 data-nosnippet>872</a>        blend_clips_onto_skeleton::&lt;<span class="number">2</span>, <span class="number">1</span>&gt;(<span class="kw-2">&amp;mut </span>skel, <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>clip, <span class="number">0.5</span>, <span class="number">1.0</span>)]);
+<a href=#863 id=863 data-nosnippet>863</a>        <span class="kw">let </span>kf2 = SkeletonKeyframe {
+<a href=#864 id=864 data-nosnippet>864</a>            time: <span class="number">1.0</span>,
+<a href=#865 id=865 data-nosnippet>865</a>            poses: <span class="kw-2">&amp;</span>[pose2],
+<a href=#866 id=866 data-nosnippet>866</a>        };
+<a href=#867 id=867 data-nosnippet>867</a>        <span class="kw">let </span>keyframes = [kf1, kf2];
+<a href=#868 id=868 data-nosnippet>868</a>        <span class="kw">let </span>clip = AnimClip::new(<span class="kw-2">&amp;</span>keyframes, <span class="bool-val">true</span>);
+<a href=#869 id=869 data-nosnippet>869</a>        <span class="macro">assert_eq!</span>(clip.duration(), <span class="number">1.0</span>);
+<a href=#870 id=870 data-nosnippet>870</a>
+<a href=#871 id=871 data-nosnippet>871</a>        <span class="kw">let </span>sampled = clip.sample_bone(<span class="number">0.5</span>, <span class="number">0</span>).unwrap();
+<a href=#872 id=872 data-nosnippet>872</a>        <span class="macro">assert!</span>((sampled.position.x - <span class="number">1.0</span>).abs() &lt; <span class="number">0.01</span>);
 <a href=#873 id=873 data-nosnippet>873</a>
-<a href=#874 id=874 data-nosnippet>874</a>        <span class="kw">let </span>bone = skel.get_bone(BoneId(<span class="number">0</span>)).unwrap();
-<a href=#875 id=875 data-nosnippet>875</a>        <span class="macro">assert!</span>((bone.position.x - <span class="number">1.0</span>).abs() &lt; <span class="number">0.01</span>);
-<a href=#876 id=876 data-nosnippet>876</a>    }
+<a href=#874 id=874 data-nosnippet>874</a>        <span class="kw">let </span><span class="kw-2">mut </span>skel = Skeleton::&lt;<span class="number">2</span>&gt;::new();
+<a href=#875 id=875 data-nosnippet>875</a>        skel.add_bone(Bone::new(<span class="string">"root"</span>), <span class="prelude-val">None</span>).unwrap();
+<a href=#876 id=876 data-nosnippet>876</a>        blend_clips_onto_skeleton::&lt;<span class="number">2</span>, <span class="number">1</span>&gt;(<span class="kw-2">&amp;mut </span>skel, <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>clip, <span class="number">0.5</span>, <span class="number">1.0</span>)]);
 <a href=#877 id=877 data-nosnippet>877</a>
-<a href=#878 id=878 data-nosnippet>878</a>    <span class="attr">#[cfg(feature = <span class="string">"anim-blend"</span>)]
-<a href=#879 id=879 data-nosnippet>879</a>    #[test]
-<a href=#880 id=880 data-nosnippet>880</a>    </span><span class="kw">fn </span>test_joint_bounds_and_slerp() {
-<a href=#881 id=881 data-nosnippet>881</a>        <span class="kw">let </span><span class="kw-2">mut </span>bone = Bone::new(<span class="string">"test"</span>);
-<a href=#882 id=882 data-nosnippet>882</a>        <span class="kw">let </span>rot = UnitQuaternion::from_euler_angles(<span class="number">0.0</span>, <span class="number">1.57</span>, <span class="number">0.0</span>);
-<a href=#883 id=883 data-nosnippet>883</a>        bone.slerp_rotation(rot, <span class="number">0.5</span>);
-<a href=#884 id=884 data-nosnippet>884</a>
-<a href=#885 id=885 data-nosnippet>885</a>        <span class="kw">let </span><span class="kw-2">mut </span>skel = Skeleton::&lt;<span class="number">2</span>&gt;::new();
-<a href=#886 id=886 data-nosnippet>886</a>        <span class="kw">let </span>b0 = skel.add_bone(bone, <span class="prelude-val">None</span>).unwrap();
-<a href=#887 id=887 data-nosnippet>887</a>        skel.update_transforms();
-<a href=#888 id=888 data-nosnippet>888</a>        skel.compute_inverse_bind_poses();
-<a href=#889 id=889 data-nosnippet>889</a>
-<a href=#890 id=890 data-nosnippet>890</a>        <span class="kw">let </span><span class="kw-2">mut </span>skin_data = SkinningData::new();
-<a href=#891 id=891 data-nosnippet>891</a>        skin_data
-<a href=#892 id=892 data-nosnippet>892</a>            .add_vertex(VertexSkinning::single_bone(b0.<span class="number">0</span>))
-<a href=#893 id=893 data-nosnippet>893</a>            .unwrap();
-<a href=#894 id=894 data-nosnippet>894</a>        <span class="kw">let </span>verts = [[-<span class="number">1.0</span>, -<span class="number">1.0</span>, -<span class="number">1.0</span>], [<span class="number">1.0</span>, <span class="number">1.0</span>, <span class="number">1.0</span>]];
-<a href=#895 id=895 data-nosnippet>895</a>
-<a href=#896 id=896 data-nosnippet>896</a>        <span class="kw">let </span>joint_aabbs = compute_joint_aabbs::&lt;<span class="number">2</span>&gt;(<span class="number">1</span>, <span class="kw-2">&amp;</span>skin_data, <span class="kw-2">&amp;</span>verts);
-<a href=#897 id=897 data-nosnippet>897</a>        <span class="macro">assert_eq!</span>(joint_aabbs.len(), <span class="number">1</span>);
-<a href=#898 id=898 data-nosnippet>898</a>        <span class="macro">assert!</span>(joint_aabbs[<span class="number">0</span>].is_some());
+<a href=#878 id=878 data-nosnippet>878</a>        <span class="kw">let </span>bone = skel.get_bone(BoneId(<span class="number">0</span>)).unwrap();
+<a href=#879 id=879 data-nosnippet>879</a>        <span class="macro">assert!</span>((bone.position.x - <span class="number">1.0</span>).abs() &lt; <span class="number">0.01</span>);
+<a href=#880 id=880 data-nosnippet>880</a>    }
+<a href=#881 id=881 data-nosnippet>881</a>
+<a href=#882 id=882 data-nosnippet>882</a>    <span class="attr">#[cfg(feature = <span class="string">"anim-blend"</span>)]
+<a href=#883 id=883 data-nosnippet>883</a>    #[test]
+<a href=#884 id=884 data-nosnippet>884</a>    </span><span class="kw">fn </span>test_joint_bounds_and_slerp() {
+<a href=#885 id=885 data-nosnippet>885</a>        <span class="kw">let </span><span class="kw-2">mut </span>bone = Bone::new(<span class="string">"test"</span>);
+<a href=#886 id=886 data-nosnippet>886</a>        <span class="kw">let </span>rot = UnitQuaternion::from_euler_angles(<span class="number">0.0</span>, <span class="number">1.57</span>, <span class="number">0.0</span>);
+<a href=#887 id=887 data-nosnippet>887</a>        bone.slerp_rotation(rot, <span class="number">0.5</span>);
+<a href=#888 id=888 data-nosnippet>888</a>
+<a href=#889 id=889 data-nosnippet>889</a>        <span class="kw">let </span><span class="kw-2">mut </span>skel = Skeleton::&lt;<span class="number">2</span>&gt;::new();
+<a href=#890 id=890 data-nosnippet>890</a>        <span class="kw">let </span>b0 = skel.add_bone(bone, <span class="prelude-val">None</span>).unwrap();
+<a href=#891 id=891 data-nosnippet>891</a>        skel.update_transforms();
+<a href=#892 id=892 data-nosnippet>892</a>        skel.compute_inverse_bind_poses();
+<a href=#893 id=893 data-nosnippet>893</a>
+<a href=#894 id=894 data-nosnippet>894</a>        <span class="kw">let </span><span class="kw-2">mut </span>skin_data = SkinningData::new();
+<a href=#895 id=895 data-nosnippet>895</a>        skin_data
+<a href=#896 id=896 data-nosnippet>896</a>            .add_vertex(VertexSkinning::single_bone(b0.<span class="number">0</span>))
+<a href=#897 id=897 data-nosnippet>897</a>            .unwrap();
+<a href=#898 id=898 data-nosnippet>898</a>        <span class="kw">let </span>verts = [[-<span class="number">1.0</span>, -<span class="number">1.0</span>, -<span class="number">1.0</span>], [<span class="number">1.0</span>, <span class="number">1.0</span>, <span class="number">1.0</span>]];
 <a href=#899 id=899 data-nosnippet>899</a>
-<a href=#900 id=900 data-nosnippet>900</a>        <span class="kw">let </span>model_aabb = skinned_model_aabb(<span class="kw-2">&amp;</span>skel, <span class="kw-2">&amp;</span>joint_aabbs);
-<a href=#901 id=901 data-nosnippet>901</a>        <span class="macro">assert!</span>(model_aabb.is_some());
-<a href=#902 id=902 data-nosnippet>902</a>    }
+<a href=#900 id=900 data-nosnippet>900</a>        <span class="kw">let </span>joint_aabbs = compute_joint_aabbs::&lt;<span class="number">2</span>&gt;(<span class="number">1</span>, <span class="kw-2">&amp;</span>skin_data, <span class="kw-2">&amp;</span>verts);
+<a href=#901 id=901 data-nosnippet>901</a>        <span class="macro">assert_eq!</span>(joint_aabbs.len(), <span class="number">1</span>);
+<a href=#902 id=902 data-nosnippet>902</a>        <span class="macro">assert!</span>(joint_aabbs[<span class="number">0</span>].is_some());
 <a href=#903 id=903 data-nosnippet>903</a>
-<a href=#904 id=904 data-nosnippet>904</a>    <span class="attr">#[cfg(all(feature = <span class="string">"dsp"</span>, feature = <span class="string">"anim-blend"</span>))]
-<a href=#905 id=905 data-nosnippet>905</a>    #[test]
-<a href=#906 id=906 data-nosnippet>906</a>    </span><span class="kw">fn </span>test_dsp_slerp() {
-<a href=#907 id=907 data-nosnippet>907</a>        <span class="kw">let </span><span class="kw-2">mut </span>bone = Bone::new(<span class="string">"dsp_bone"</span>);
-<a href=#908 id=908 data-nosnippet>908</a>        <span class="kw">let </span>rot = UnitQuaternion::from_euler_angles(<span class="number">0.0</span>, <span class="number">1.0</span>, <span class="number">0.0</span>);
-<a href=#909 id=909 data-nosnippet>909</a>        bone.interpolate_rotation_dsp(rot, <span class="number">0.5</span>);
-<a href=#910 id=910 data-nosnippet>910</a>    }
-<a href=#911 id=911 data-nosnippet>911</a>}
+<a href=#904 id=904 data-nosnippet>904</a>        <span class="kw">let </span>model_aabb = skinned_model_aabb(<span class="kw-2">&amp;</span>skel, <span class="kw-2">&amp;</span>joint_aabbs);
+<a href=#905 id=905 data-nosnippet>905</a>        <span class="macro">assert!</span>(model_aabb.is_some());
+<a href=#906 id=906 data-nosnippet>906</a>    }
+<a href=#907 id=907 data-nosnippet>907</a>
+<a href=#908 id=908 data-nosnippet>908</a>    <span class="attr">#[cfg(all(feature = <span class="string">"dsp"</span>, feature = <span class="string">"anim-blend"</span>))]
+<a href=#909 id=909 data-nosnippet>909</a>    #[test]
+<a href=#910 id=910 data-nosnippet>910</a>    </span><span class="kw">fn </span>test_dsp_slerp() {
+<a href=#911 id=911 data-nosnippet>911</a>        <span class="kw">let </span><span class="kw-2">mut </span>bone = Bone::new(<span class="string">"dsp_bone"</span>);
+<a href=#912 id=912 data-nosnippet>912</a>        <span class="kw">let </span>rot = UnitQuaternion::from_euler_angles(<span class="number">0.0</span>, <span class="number">1.0</span>, <span class="number">0.0</span>);
+<a href=#913 id=913 data-nosnippet>913</a>        bone.interpolate_rotation_dsp(rot, <span class="number">0.5</span>);
+<a href=#914 id=914 data-nosnippet>914</a>    }
+<a href=#915 id=915 data-nosnippet>915</a>}
 </code></pre></div></section></main></body></html>
