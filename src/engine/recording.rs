@@ -493,7 +493,7 @@ where
             .count();
     }
     let state = engine.raster_state(frame.width, frame.height);
-    crate::pipeline::renderer::execute_commands(fb, frame, commands, &state)
+    crate::pipeline::renderer::execute::execute_commands(fb, frame, commands, &state)
 }
 
 #[cfg(feature = "textured")]
@@ -525,7 +525,7 @@ where
             .count();
     }
     let state = engine.raster_state(frame.width, frame.height);
-    crate::pipeline::renderer::execute_commands_textured(
+    crate::pipeline::renderer::execute::execute_commands_textured(
         fb,
         frame,
         commands,
@@ -546,7 +546,7 @@ where
     D::Error: Debug,
 {
     let state = engine.raster_state(frame.width, frame.height);
-    crate::pipeline::renderer::execute_commands_tiled::<D, MAX, BIN_CAP>(
+    crate::pipeline::renderer::execute::execute_commands_tiled::<D, MAX, BIN_CAP>(
         fb, frame, commands, tile, &state,
     )
 }
