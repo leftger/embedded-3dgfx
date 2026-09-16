@@ -9,9 +9,10 @@
 
 extern crate std;
 
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, LODLevels};
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, LODLevels};
 use embedded_3dgfx::{
-    bounds::Aabb, engine::K3dengine, mesh_ray_cast, mesh_ray_cast_bounded, mesh_ray_cast_mesh,
+    engine::K3dengine, mesh_ray_cast, mesh_ray_cast_bounded, mesh_ray_cast_mesh,
+    pipeline::vertex::bounds::Aabb,
 };
 use nalgebra::{Matrix4, Point3, Vector3};
 
@@ -100,13 +101,18 @@ fn two_stage_cull_rejects_far_mesh() {
     engine.camera.set_position(Point3::new(0.0, 0.0, 5.0));
     engine.camera.set_target(Point3::new(0.0, 0.0, 0.0));
     // Behind the camera / far outside frustum — record should emit no draws.
-    let mut cmds = embedded_3dgfx::command_buffer::CommandBuffer::<64>::new();
+    let mut cmds = embedded_3dgfx::pipeline::command_buffer::CommandBuffer::<64>::new();
     engine
         .record(core::iter::once(&mesh), &mut cmds, None)
         .unwrap();
     let draws = cmds
         .iter()
-        .filter(|c| matches!(c, embedded_3dgfx::command_buffer::RenderCommand::Draw(_)))
+        .filter(|c| {
+            matches!(
+                c,
+                embedded_3dgfx::pipeline::command_buffer::RenderCommand::Draw(_)
+            )
+        })
         .count();
     assert_eq!(draws, 0);
 }
@@ -114,7 +120,7 @@ fn two_stage_cull_rejects_far_mesh() {
 #[cfg(feature = "render-layers")]
 mod layers {
     use super::*;
-    use embedded_3dgfx::render_layers::RenderLayers;
+    use embedded_3dgfx::pipeline::vertex::render_layers::RenderLayers;
 
     #[test]
     fn layer_mismatch_culls_mesh() {
@@ -125,33 +131,43 @@ mod layers {
         engine.camera.set_position(Point3::new(0.0, 0.0, 5.0));
         engine.camera.set_target(Point3::new(0.0, 0.0, 0.0));
         // Default camera is layer 0 only.
-        let mut cmds = embedded_3dgfx::command_buffer::CommandBuffer::<64>::new();
+        let mut cmds = embedded_3dgfx::pipeline::command_buffer::CommandBuffer::<64>::new();
         engine
             .record(core::iter::once(&mesh), &mut cmds, None)
             .unwrap();
         let draws = cmds
             .iter()
-            .filter(|c| matches!(c, embedded_3dgfx::command_buffer::RenderCommand::Draw(_)))
+            .filter(|c| {
+                matches!(
+                    c,
+                    embedded_3dgfx::pipeline::command_buffer::RenderCommand::Draw(_)
+                )
+            })
             .count();
         assert_eq!(draws, 0);
 
         engine.camera.set_layers(RenderLayers::layer(3));
-        let mut cmds2 = embedded_3dgfx::command_buffer::CommandBuffer::<256>::new();
+        let mut cmds2 = embedded_3dgfx::pipeline::command_buffer::CommandBuffer::<256>::new();
         // Solid mode so triangles actually emit.
-        mesh.set_render_mode(embedded_3dgfx::mesh::RenderMode::Solid);
+        mesh.set_render_mode(embedded_3dgfx::pipeline::vertex::mesh::RenderMode::Solid);
         engine
             .record(core::iter::once(&mesh), &mut cmds2, None)
             .unwrap();
         // May still be 0 if triangle fails projection; at least layers no longer cull.
         // Force a point mode which is more reliable at origin.
-        mesh.set_render_mode(embedded_3dgfx::mesh::RenderMode::Points);
-        let mut cmds3 = embedded_3dgfx::command_buffer::CommandBuffer::<256>::new();
+        mesh.set_render_mode(embedded_3dgfx::pipeline::vertex::mesh::RenderMode::Points);
+        let mut cmds3 = embedded_3dgfx::pipeline::command_buffer::CommandBuffer::<256>::new();
         engine
             .record(core::iter::once(&mesh), &mut cmds3, None)
             .unwrap();
         let draws = cmds3
             .iter()
-            .filter(|c| matches!(c, embedded_3dgfx::command_buffer::RenderCommand::Draw(_)))
+            .filter(|c| {
+                matches!(
+                    c,
+                    embedded_3dgfx::pipeline::command_buffer::RenderCommand::Draw(_)
+                )
+            })
             .count();
         assert!(draws > 0, "matching layers should allow recording");
     }
@@ -160,7 +176,7 @@ mod layers {
 #[cfg(feature = "lod-crossfade")]
 mod lod {
     use super::*;
-    use embedded_3dgfx::mesh::LodPick;
+    use embedded_3dgfx::pipeline::vertex::mesh::LodPick;
 
     #[test]
     fn fade_margin_produces_crossfade() {
@@ -286,9 +302,9 @@ mod anim {
 
 #[cfg(feature = "gizmos")]
 mod gizmos_tests {
-    use embedded_3dgfx::bounds::Aabb;
     use embedded_3dgfx::gizmos::emit_aabb_wireframe_projected;
-    use embedded_3dgfx::primitive::DrawPrimitive;
+    use embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive;
+    use embedded_3dgfx::pipeline::vertex::bounds::Aabb;
     use embedded_graphics_core::pixelcolor::{Rgb565, WebColors};
     use nalgebra::{Matrix4, Point3, Vector3};
 
@@ -314,7 +330,7 @@ mod gizmos_tests {
 #[cfg(feature = "record-sort")]
 mod sort {
     use super::*;
-    use embedded_3dgfx::mesh::RenderMode;
+    use embedded_3dgfx::pipeline::vertex::mesh::RenderMode;
     use embedded_graphics_core::pixelcolor::{Rgb565, WebColors};
 
     #[test]
@@ -335,7 +351,7 @@ mod sort {
         engine.camera.set_position(Point3::new(0.0, 0.0, 5.0));
         engine.camera.set_target(Point3::new(0.0, 0.0, 0.0));
 
-        let mut cmds = embedded_3dgfx::command_buffer::CommandBuffer::<256>::new();
+        let mut cmds = embedded_3dgfx::pipeline::command_buffer::CommandBuffer::<256>::new();
         // Input order: low then high — sort should put high first.
         engine
             .record([&lo, &hi].into_iter(), &mut cmds, None)
@@ -343,8 +359,11 @@ mod sort {
         let colors: std::vec::Vec<_> = cmds
             .iter()
             .filter_map(|c| match c {
-                embedded_3dgfx::command_buffer::RenderCommand::Draw(
-                    embedded_3dgfx::primitive::DrawPrimitive::ColoredPoint(_, col),
+                embedded_3dgfx::pipeline::command_buffer::RenderCommand::Draw(
+                    embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive::ColoredPoint(
+                        _,
+                        col,
+                    ),
                 ) => Some(*col),
                 _ => None,
             })

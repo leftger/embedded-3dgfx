@@ -1,6 +1,4 @@
-/// Re-export BSP telemetry from the bsp module for ergonomic imports.
-#[cfg(feature = "raycast")]
-pub use crate::bsp::BspTelemetry;
+//! Record/execute telemetry counters for budget and regression checks.
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RecordTelemetry {

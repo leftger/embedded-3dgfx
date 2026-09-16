@@ -6,8 +6,8 @@
 //! requiring triangle mesh generation.
 
 #[cfg(feature = "aabb-cull")]
-use crate::bounds::Aabb;
-use crate::camera::Ray;
+use crate::pipeline::vertex::bounds::Aabb;
+use crate::pipeline::vertex::camera::Ray;
 use nalgebra::Vector3;
 
 #[cfg(not(feature = "std"))]

@@ -15,9 +15,9 @@ use heapless::Vec;
 use nalgebra::{Point3, Vector3};
 
 use crate::{
-    camera::Camera,
-    renderer::{PickQuery, PickResult},
-    shader::blend::fast_blend_rgb565,
+    pipeline::renderer::{PickQuery, PickResult},
+    pipeline::shade::shader::blend::fast_blend_rgb565,
+    pipeline::vertex::camera::Camera,
 };
 
 /// A single flare element along the sun-to-screen-center axis.

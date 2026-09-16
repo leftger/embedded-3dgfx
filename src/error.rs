@@ -1,6 +1,19 @@
-use crate::display_backend::DisplayError;
+//! Rendering error taxonomy shared by the record and execute stages.
+
+/// Error returned by a display backend transfer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DisplayError {
+    /// DMA transfer is still in progress.
+    Busy,
+    /// Hardware error during transfer.
+    HardwareError,
+    /// Invalid buffer configuration.
+    InvalidBuffer,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BudgetKind {
     DrawPrimitives {
         attempted: usize,
@@ -49,6 +62,7 @@ impl BudgetKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RenderError {
     OutOfBudget(BudgetKind),
     InvalidInput(&'static str),
@@ -62,6 +76,7 @@ pub enum RenderError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BackendFaultKind {
     DmaBusyTimeout,
     TransferStartFailed,
@@ -70,6 +85,7 @@ pub enum BackendFaultKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StallKind {
     RecordStage,
     ExecuteStage,
@@ -77,6 +93,7 @@ pub enum StallKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RuntimeFaultKind {
     Backend(BackendFaultKind),
     Budget(BudgetKind),
@@ -84,6 +101,7 @@ pub enum RuntimeFaultKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RecoveryAction {
     Retry,
     RetryWithFallback,

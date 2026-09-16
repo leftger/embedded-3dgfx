@@ -411,7 +411,8 @@ pub fn apply_skinning_to_normals<const N: usize>(
 
 #[cfg(feature = "anim-blend")]
 mod anim_blend_api {
-    use super::*;
+    use super::{Bone, BoneId, Skeleton, SkinningData};
+    use nalgebra::{UnitQuaternion, Vector3};
 
     /// Local bone pose (position + rotation + scale) for clip sampling / blending.
     #[derive(Debug, Clone, Copy)]
@@ -564,15 +565,15 @@ mod anim_blend_api {
     }
 
     impl JointAabb {
-        pub fn from_aabb(aabb: crate::bounds::Aabb) -> Self {
+        pub fn from_aabb(aabb: crate::pipeline::vertex::bounds::Aabb) -> Self {
             Self {
                 center: aabb.center,
                 half_extents: aabb.half_extents,
             }
         }
 
-        pub fn to_aabb(self) -> crate::bounds::Aabb {
-            crate::bounds::Aabb {
+        pub fn to_aabb(self) -> crate::pipeline::vertex::bounds::Aabb {
+            crate::pipeline::vertex::bounds::Aabb {
                 center: self.center,
                 half_extents: self.half_extents,
             }
@@ -618,9 +619,9 @@ mod anim_blend_api {
         let mut out: heapless::Vec<Option<JointAabb>, N> = heapless::Vec::new();
         for i in 0..skeleton_bones.min(N) {
             let entry = if i < 64 && used[i] {
-                Some(JointAabb::from_aabb(crate::bounds::Aabb::from_min_max(
-                    mins[i], maxs[i],
-                )))
+                Some(JointAabb::from_aabb(
+                    crate::pipeline::vertex::bounds::Aabb::from_min_max(mins[i], maxs[i]),
+                ))
             } else {
                 None
             };
@@ -634,8 +635,8 @@ mod anim_blend_api {
     pub fn skinned_model_aabb<const N: usize>(
         skeleton: &Skeleton<N>,
         joint_aabbs: &[Option<JointAabb>],
-    ) -> Option<crate::bounds::Aabb> {
-        let mut acc: Option<crate::bounds::Aabb> = None;
+    ) -> Option<crate::pipeline::vertex::bounds::Aabb> {
+        let mut acc: Option<crate::pipeline::vertex::bounds::Aabb> = None;
         for (i, ja) in joint_aabbs.iter().enumerate() {
             let Some(ja) = ja else { continue };
             let Some(bone) = skeleton.get_bone(BoneId(i)) else {
@@ -654,7 +655,10 @@ mod anim_blend_api {
 }
 
 #[cfg(feature = "anim-blend")]
-pub use anim_blend_api::*;
+pub use anim_blend_api::{
+    AnimClip, BonePose, JointAabb, SkeletonKeyframe, blend_clips_onto_skeleton,
+    compute_joint_aabbs, skinned_model_aabb,
+};
 
 #[cfg(all(feature = "dsp", feature = "anim-blend"))]
 impl Bone {

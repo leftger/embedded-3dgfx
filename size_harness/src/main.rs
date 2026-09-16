@@ -8,9 +8,9 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use embedded_3dgfx::command_buffer::CommandBuffer;
 use embedded_3dgfx::engine::K3dengine;
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::pipeline::command_buffer::CommandBuffer;
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
 #[cfg(feature = "lighting")]
 use embedded_graphics_core::pixelcolor::Rgb565;
 use panic_halt as _;
@@ -46,7 +46,7 @@ fn main() -> ! {
         mesh.set_render_mode(RenderMode::SolidLightDir(nalgebra::Vector3::new(
             0.0, 1.0, 0.0,
         )));
-        let _ = engine.add_point_light(embedded_3dgfx::lights::PointLight::new(
+        let _ = engine.add_point_light(embedded_3dgfx::pipeline::shade::lights::PointLight::new(
             nalgebra::Point3::new(0.0, 1.0, 0.0),
             Rgb565::new(31, 63, 31),
             1.0,
@@ -56,12 +56,13 @@ fn main() -> ! {
     #[cfg(feature = "full")]
     {
         // Keep optional modules reachable so LTO cannot erase their flash cost.
-        let _ = core::mem::size_of::<embedded_3dgfx::texture::TextureManager<1>>();
+        let _ =
+            core::mem::size_of::<embedded_3dgfx::pipeline::rasterize::texture::TextureManager<1>>();
         let _ = embedded_3dgfx::raycast::Raycaster2D::new(32, 24);
         let _ = core::mem::size_of::<embedded_3dgfx::particles::ParticleSystem<8>>();
         let _ = core::mem::size_of::<embedded_3dgfx::physics::PhysicsWorld<2>>();
         let mut buf = [0u8; 5];
-        let _ = embedded_3dgfx::hud::format_u16_dec(0u16, &mut buf, 5);
+        let _ = embedded_3dgfx::pipeline::output::hud::format_u16_dec(0u16, &mut buf, 5);
     }
 
     let mut commands = CommandBuffer::<64>::new();

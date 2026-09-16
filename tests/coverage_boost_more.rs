@@ -2,30 +2,33 @@
 use core::future::Future;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use embedded_3dgfx::ZDepth;
-use embedded_3dgfx::command_buffer::{CommandBuffer, RenderCommand};
 use embedded_3dgfx::config::*;
-use embedded_3dgfx::display_backend::*;
-use embedded_3dgfx::draw::{
-    DepthInterpolationMode, DitherConfig, FogConfig, InterlaceField, ScreenDoorConfig,
-    draw_zbuffered_with_options,
-};
-#[cfg(feature = "textured")]
-use embedded_3dgfx::draw::{draw_zbuffered_with_textures, draw_zbuffered_with_textures_mapped};
 use embedded_3dgfx::engine::K3dengine;
 use embedded_3dgfx::error::{BudgetKind, RenderError};
-#[cfg(feature = "lighting")]
-use embedded_3dgfx::lights::*;
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
 #[cfg(feature = "painters")]
 use embedded_3dgfx::painters::DepthSortedTriangle;
 #[cfg(feature = "physics")]
 use embedded_3dgfx::physics::*;
-use embedded_3dgfx::primitive::DrawPrimitive;
-use embedded_3dgfx::renderer::*;
-use embedded_3dgfx::retro::*;
-use embedded_3dgfx::swapchain::*;
+use embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive;
+use embedded_3dgfx::pipeline::command_buffer::{CommandBuffer, RenderCommand};
+use embedded_3dgfx::pipeline::effects::{
+    DepthInterpolationMode, DitherConfig, FogConfig, InterlaceField, ScreenDoorConfig,
+};
+use embedded_3dgfx::pipeline::output::display_backend::*;
+use embedded_3dgfx::pipeline::output::swapchain::*;
+use embedded_3dgfx::pipeline::rasterize::draw::draw_zbuffered_with_options;
+use embedded_3dgfx::pipeline::rasterize::draw::state::RasterState;
 #[cfg(feature = "textured")]
-use embedded_3dgfx::texture::*;
+use embedded_3dgfx::pipeline::rasterize::draw::{
+    draw_zbuffered_with_textures, draw_zbuffered_with_textures_mapped,
+};
+#[cfg(feature = "textured")]
+use embedded_3dgfx::pipeline::rasterize::texture::*;
+use embedded_3dgfx::pipeline::renderer::*;
+#[cfg(feature = "lighting")]
+use embedded_3dgfx::pipeline::shade::lights::*;
+use embedded_3dgfx::pipeline::shade::retro::*;
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use embedded_graphics_framebuf::{FrameBuf, backends::EndianCorrectedBuffer};
 use nalgebra::{Matrix4, Point2, Point3, Vector3};
@@ -390,19 +393,8 @@ fn test_renderer_textured_effects_and_ssaa() {
             width: 32,
             height: 32,
         };
-        let res = execute_commands_with_dirty_region_effects_textured(
-            &mut fb,
-            &mut frame,
-            &cmd,
-            &tex_mgr,
-            None,
-            None,
-            None,
-            StippleMode::Off,
-            PaletteMode::Off,
-            None,
-            [0.0, 0.0, -1.0],
-        );
+        let state = RasterState::new(frame.width, frame.height);
+        let res = execute_commands_textured(&mut fb, &mut frame, &cmd, &tex_mgr, &state);
         assert!(res.is_ok());
     }
 

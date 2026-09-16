@@ -1,3 +1,5 @@
+//! Versioned chunked scene container decoding.
+
 use crate::error::RenderError;
 
 pub const SCENE_MAGIC: [u8; 4] = *b"E3DS";

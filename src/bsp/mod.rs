@@ -16,7 +16,6 @@
 
 #[cfg(feature = "std")]
 pub mod builder;
-pub mod coverage;
 pub mod data;
 pub mod pvs;
 pub mod scratch;
@@ -31,17 +30,17 @@ use heapless::Vec as HVec;
 use nalgebra::{Point2, Vector4};
 
 use crate::{
-    command_buffer::{CommandBuffer, RenderCommand},
     engine::K3dengine,
     error::RenderError,
-    lights::PointLight,
-    primitive::DrawPrimitive,
-    renderer::FrameCtx,
+    pipeline::assemble::primitive::DrawPrimitive,
+    pipeline::command_buffer::{CommandBuffer, RenderCommand},
+    pipeline::rasterize::texture::TextureManager,
+    pipeline::renderer::FrameCtx,
+    pipeline::shade::lights::PointLight,
     sector_lights::{SectorLight, light_level_u8_at},
-    texture::TextureManager,
 };
 
-use coverage::CoverageBuffer;
+use crate::pipeline::rasterize::coverage::CoverageBuffer;
 use data::{BspWorld, Face};
 use scratch::BspScratch;
 use traverse::{ClipVert, frustum_from_vp, project_to_screen, walk_front_to_back};
@@ -464,13 +463,15 @@ impl K3dengine {
         commands: &CommandBuffer<MAX>,
         texture_manager: &TextureManager<N>,
         telemetry: Option<&mut crate::telemetry::ExecuteTelemetry>,
-    ) -> Result<Option<crate::renderer::DirtyRegion>, RenderError>
+    ) -> Result<Option<crate::pipeline::renderer::DirtyRegion>, RenderError>
     where
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        use crate::draw::{draw_zbuffered_lightmapped_mapped, draw_zbuffered_with_textures_mapped};
-        use crate::renderer::DirtyRegion;
+        use crate::pipeline::rasterize::draw::textured::{
+            draw_zbuffered_lightmapped_mapped, draw_zbuffered_with_textures_mapped,
+        };
+        use crate::pipeline::renderer::DirtyRegion;
 
         frame.validate()?;
         let mut dirty: Option<(i32, i32, i32, i32)> = None;
@@ -513,6 +514,7 @@ impl K3dengine {
                             brightness,
                             dynamic_tint,
                         } => {
+                            let state = self.raster_state(frame.width, frame.height);
                             draw_zbuffered_lightmapped_mapped(
                                 points,
                                 depths,
@@ -523,15 +525,10 @@ impl K3dengine {
                                 lightmap_id,
                                 brightness,
                                 dynamic_tint,
-                                self.fog.as_ref(),
                                 texture_manager,
                                 fb,
                                 frame.zbuffer,
-                                frame.width,
-                                self.texture_mapping,
-                                self.stipple_mode,
-                                self.screen_tint,
-                                self.palette_mode,
+                                &state,
                             );
                         }
                         other => {
@@ -590,7 +587,7 @@ impl K3dengine {
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        use crate::draw::draw_zbuffered_lightmapped_mapped;
+        use crate::pipeline::rasterize::draw::textured::draw_zbuffered_lightmapped_mapped;
 
         frame.validate()?;
         crate::clear_zbuffer(frame.zbuffer, crate::Z_MAX_VALUE);
@@ -630,6 +627,7 @@ impl K3dengine {
                 );
 
                 for pt in projected.iter() {
+                    let state = self.raster_state(frame.width, frame.height);
                     draw_zbuffered_lightmapped_mapped(
                         [pt.points[0], pt.points[1], pt.points[2]],
                         pt.depths,
@@ -644,15 +642,10 @@ impl K3dengine {
                         },
                         255,
                         dynamic_tint,
-                        self.fog.as_ref(),
                         texture_manager,
                         fb,
                         frame.zbuffer,
-                        frame.width,
-                        self.texture_mapping,
-                        self.stipple_mode,
-                        self.screen_tint,
-                        self.palette_mode,
+                        &state,
                     );
                     tel.triangles_emitted += 1;
                     emitted_any = true;
@@ -692,7 +685,7 @@ impl K3dengine {
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        use crate::draw::draw_bsp_coverage;
+        use crate::pipeline::rasterize::draw::textured::draw_bsp_coverage;
 
         coverage.clear();
         scratch.mark_new_frame();
@@ -791,7 +784,7 @@ fn prim_bounds(p: &DrawPrimitive) -> (i32, i32, i32, i32) {
 /// Both rooms are fully mutually visible (no zero-run PVS entries).
 #[allow(dead_code)]
 pub mod test_level {
-    use super::data::*;
+    use super::data::{BspWorld, Face, Leaf, Node, Plane};
 
     pub static PLANES: [Plane; 1] = [Plane {
         normal: [1.0, 0.0, 0.0],

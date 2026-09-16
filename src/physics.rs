@@ -1791,7 +1791,7 @@ impl<const N: usize, const M: usize> PhysicsWorld<N, M> {
 }
 
 /// Helper to sync a [`RigidBody`]'s position and orientation back to a
-/// [`K3dMesh`](crate::mesh::K3dMesh).
+/// [`K3dMesh`](crate::pipeline::vertex::mesh::K3dMesh).
 ///
 /// Call this after `PhysicsWorld::step()` to update mesh transforms.
 ///
@@ -1802,7 +1802,7 @@ impl<const N: usize, const M: usize> PhysicsWorld<N, M> {
 ///     sync_body_to_mesh(body, &mut meshes[id]);
 /// }
 /// ```
-pub fn sync_body_to_mesh(body: &RigidBody, mesh: &mut crate::mesh::K3dMesh<'_>) {
+pub fn sync_body_to_mesh(body: &RigidBody, mesh: &mut crate::pipeline::vertex::mesh::K3dMesh<'_>) {
     mesh.set_position(body.position.x, body.position.y, body.position.z);
     mesh.set_rotation(body.orientation);
 }

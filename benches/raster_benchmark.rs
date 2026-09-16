@@ -74,7 +74,7 @@ fn main() {
     let mut fb = DummyTarget::new(width, height);
     let start = Instant::now();
     for _ in 0..iterations {
-        embedded_3dgfx::draw::fill_triangle(
+        embedded_3dgfx::pipeline::rasterize::draw::fill_triangle(
             std::hint::black_box(p1),
             std::hint::black_box(p2),
             std::hint::black_box(p3),
@@ -90,7 +90,7 @@ fn main() {
         let mut fb = DummyTarget::new(width, height);
         let start = Instant::now();
         for _ in 0..iterations {
-            embedded_3dgfx::draw::fill_triangle_fixed(
+            embedded_3dgfx::pipeline::rasterize::draw::fill_triangle_fixed(
                 std::hint::black_box(p1),
                 std::hint::black_box(p2),
                 std::hint::black_box(p3),

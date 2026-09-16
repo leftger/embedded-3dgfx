@@ -16,8 +16,8 @@
 //! Note: callers supply a fixed triangle scratch buffer; no heap allocation is required.
 
 use crate::engine::K3dengine;
-use crate::mesh::{K3dMesh, RenderMode};
-use crate::primitive::DrawPrimitive;
+use crate::pipeline::assemble::primitive::DrawPrimitive;
+use crate::pipeline::vertex::mesh::{K3dMesh, RenderMode};
 use core::cmp::Ordering;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 use nalgebra::{Vector3, Vector4};
@@ -375,7 +375,7 @@ mod tests {
             [20.0f32, 2.0, 0.0], // intentionally far outside horizontal frustum
         ];
         let faces = [[0usize, 1usize, 2usize]];
-        let geometry = crate::mesh::Geometry {
+        let geometry = crate::pipeline::vertex::mesh::Geometry {
             vertices: &vertices,
             faces: &faces,
             colors: &[],
@@ -385,8 +385,8 @@ mod tests {
             uvs: &[],
             texture_id: None,
         };
-        let mut mesh = crate::mesh::K3dMesh::new(geometry);
-        mesh.set_render_mode(crate::mesh::RenderMode::Solid);
+        let mut mesh = crate::pipeline::vertex::mesh::K3dMesh::new(geometry);
+        mesh.set_render_mode(crate::pipeline::vertex::mesh::RenderMode::Solid);
         mesh.set_color(Rgb565::new(31, 0, 0));
 
         let mut triangles = [DepthSortedTriangle::DUMMY; 256];
@@ -410,7 +410,7 @@ mod tests {
             [30.0f32, 2.0, 0.0], // heavily clipped, typically produces a fan
         ];
         let faces = [[0usize, 1usize, 2usize]];
-        let geometry = crate::mesh::Geometry {
+        let geometry = crate::pipeline::vertex::mesh::Geometry {
             vertices: &vertices,
             faces: &faces,
             colors: &[],
@@ -420,8 +420,8 @@ mod tests {
             uvs: &[],
             texture_id: None,
         };
-        let mut mesh = crate::mesh::K3dMesh::new(geometry);
-        mesh.set_render_mode(crate::mesh::RenderMode::Solid);
+        let mut mesh = crate::pipeline::vertex::mesh::K3dMesh::new(geometry);
+        mesh.set_render_mode(crate::pipeline::vertex::mesh::RenderMode::Solid);
         mesh.set_color(Rgb565::new(0, 63, 0));
 
         let mut triangles = [DepthSortedTriangle::DUMMY; 256];
@@ -476,11 +476,14 @@ mod tests {
         // Test SectorBright & point lights in painters
         #[cfg(feature = "lighting")]
         {
-            let light =
-                crate::lights::PointLight::new(Point3::new(0.0, 0.0, 1.0), Rgb565::WHITE, 10.0);
+            let light = crate::pipeline::shade::lights::PointLight::new(
+                Point3::new(0.0, 0.0, 1.0),
+                Rgb565::WHITE,
+                10.0,
+            );
             engine.add_point_light(light);
 
-            let geom = crate::mesh::Geometry {
+            let geom = crate::pipeline::vertex::mesh::Geometry {
                 vertices: &vertices,
                 faces: &[face],
                 normals: &normals,
@@ -490,8 +493,8 @@ mod tests {
                 uvs: &[],
                 texture_id: None,
             };
-            let mut mesh = crate::mesh::K3dMesh::new(geom);
-            mesh.set_render_mode(crate::mesh::RenderMode::SectorBright(200));
+            let mut mesh = crate::pipeline::vertex::mesh::K3dMesh::new(geom);
+            mesh.set_render_mode(crate::pipeline::vertex::mesh::RenderMode::SectorBright(200));
 
             let mut triangles = [DepthSortedTriangle::DUMMY; 16];
             let count =
@@ -504,7 +507,7 @@ mod tests {
     fn painters_out_of_bounds_and_empty_vertices() {
         let engine = K3dengine::new(320, 240);
         let vertices_empty = [[0.0f32, 0.0, 0.0]];
-        let geom_empty = crate::mesh::Geometry {
+        let geom_empty = crate::pipeline::vertex::mesh::Geometry {
             vertices: &vertices_empty,
             faces: &[],
             colors: &[],
@@ -514,14 +517,14 @@ mod tests {
             uvs: &[],
             texture_id: None,
         };
-        let mesh_empty = crate::mesh::K3dMesh::new(geom_empty);
+        let mesh_empty = crate::pipeline::vertex::mesh::K3dMesh::new(geom_empty);
         let mut triangles = [DepthSortedTriangle::DUMMY; 16];
         let count =
             engine.render_painters_algorithm(core::iter::once(&mesh_empty), &mut triangles, |_| {});
         assert_eq!(count, 0);
 
         let vertices = [[0.0f32, 0.0, 0.0]];
-        let geom_invalid_face = crate::mesh::Geometry {
+        let geom_invalid_face = crate::pipeline::vertex::mesh::Geometry {
             vertices: &vertices,
             faces: &[[0, 1, 2]],
             colors: &[],

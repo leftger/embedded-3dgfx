@@ -6,7 +6,7 @@
 //! Keyframes store Euler angles for `const` friendliness; sampling converts to
 //! quaternions and slerps to avoid gimbal artifacts.
 
-use crate::mesh::K3dMesh;
+use crate::pipeline::vertex::mesh::K3dMesh;
 use crate::tween::lerp;
 use nalgebra::{Point3, UnitQuaternion};
 
@@ -68,7 +68,7 @@ impl SampledTransform {
     }
 
     /// Apply position only to a camera.
-    pub fn apply_position_to_camera(&self, camera: &mut crate::camera::Camera) {
+    pub fn apply_position_to_camera(&self, camera: &mut crate::pipeline::vertex::camera::Camera) {
         camera.set_position(Point3::new(
             self.position[0],
             self.position[1],
@@ -285,7 +285,7 @@ mod tests {
 
     fn mesh() -> K3dMesh<'static> {
         static VERTICES: [[f32; 3]; 1] = [[0.0, 0.0, 0.0]];
-        let geometry = crate::mesh::Geometry {
+        let geometry = crate::pipeline::vertex::mesh::Geometry {
             vertices: &VERTICES,
             faces: &[],
             colors: &[],
@@ -351,7 +351,7 @@ mod tests {
         assert!((pos.y - 3.0).abs() < 1e-5);
         assert!((pos.z - 4.0).abs() < 1e-5);
 
-        let mut camera = crate::camera::Camera::new(1.0);
+        let mut camera = crate::pipeline::vertex::camera::Camera::new(1.0);
         sample.apply_position_to_camera(&mut camera);
         let cp = camera.position;
         assert!((cp.x - 2.0).abs() < 1e-5);

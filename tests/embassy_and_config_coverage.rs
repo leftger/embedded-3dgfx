@@ -1,8 +1,8 @@
 use core::future::Future;
 use core::task::{Context, Poll, Waker};
 use embedded_3dgfx::config::*;
-use embedded_3dgfx::display_backend::{AsyncDmaTransfer, DmaTransfer};
 use embedded_3dgfx::embassy::*;
+use embedded_3dgfx::pipeline::output::display_backend::{AsyncDmaTransfer, DmaTransfer};
 use embedded_3dgfx::simplex_stroke_font::{self, SIMPLEX_STROKE_FONT};
 use embedded_graphics_core::pixelcolor::Rgb565;
 use embedded_graphics_framebuf::{FrameBuf, backends::EndianCorrectedBuffer};

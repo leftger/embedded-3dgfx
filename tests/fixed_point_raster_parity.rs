@@ -1,7 +1,9 @@
 #![cfg(feature = "fixed-raster")]
 
 use embedded_3dgfx::Z_MAX_VALUE;
-use embedded_3dgfx::draw::{fill_triangle_fixed, fill_triangle_zbuffered_fixed};
+use embedded_3dgfx::pipeline::rasterize::draw::{
+    fill_triangle_fixed, fill_triangle_zbuffered_fixed,
+};
 use embedded_graphics_core::draw_target::DrawTarget;
 use embedded_graphics_core::geometry::Point;
 use embedded_graphics_core::pixelcolor::Rgb565;

@@ -217,7 +217,7 @@ impl<const N: usize> ParticleSystem<N> {
     /// `commands`.
     ///
     /// Each particle emits two
-    /// [`DrawPrimitive::ColoredTriangleWithDepth`][crate::primitive::DrawPrimitive::ColoredTriangleWithDepth]
+    /// [`DrawPrimitive::ColoredTriangleWithDepth`][crate::pipeline::assemble::primitive::DrawPrimitive::ColoredTriangleWithDepth]
     /// commands.  Billboard orientation uses world-up `(0, 1, 0)`, which is
     /// correct for all but extreme pitch angles.
     ///
@@ -227,9 +227,9 @@ impl<const N: usize> ParticleSystem<N> {
     pub fn record<const MAX: usize>(
         &self,
         engine: &crate::engine::K3dengine,
-        commands: &mut crate::command_buffer::CommandBuffer<MAX>,
+        commands: &mut crate::pipeline::command_buffer::CommandBuffer<MAX>,
     ) -> usize {
-        use crate::command_buffer::RenderCommand;
+        use crate::pipeline::command_buffer::RenderCommand;
 
         if self.active == 0 {
             return 0;
@@ -260,14 +260,14 @@ impl<const N: usize> ParticleSystem<N> {
             };
 
             let _ = commands.push(RenderCommand::Draw(
-                crate::primitive::DrawPrimitive::ColoredTriangleWithDepth {
+                crate::pipeline::assemble::primitive::DrawPrimitive::ColoredTriangleWithDepth {
                     points: [pts1[0].xy(), pts1[1].xy(), pts1[2].xy()],
                     depths: [pts1[0].z as f32, pts1[1].z as f32, pts1[2].z as f32],
                     color,
                 },
             ));
             let _ = commands.push(RenderCommand::Draw(
-                crate::primitive::DrawPrimitive::ColoredTriangleWithDepth {
+                crate::pipeline::assemble::primitive::DrawPrimitive::ColoredTriangleWithDepth {
                     points: [pts2[0].xy(), pts2[1].xy(), pts2[2].xy()],
                     depths: [pts2[0].z as f32, pts2[1].z as f32, pts2[2].z as f32],
                     color,
@@ -284,11 +284,11 @@ impl<const N: usize> ParticleSystem<N> {
     pub fn record_with_gradient<const MAX: usize>(
         &self,
         engine: &crate::engine::K3dengine,
-        commands: &mut crate::command_buffer::CommandBuffer<MAX>,
+        commands: &mut crate::pipeline::command_buffer::CommandBuffer<MAX>,
         gradient: Option<&crate::color_gradient::ColorGradient<Rgb565>>,
         size_curve: Option<&crate::curve::Curve<f32>>,
     ) -> usize {
-        use crate::command_buffer::RenderCommand;
+        use crate::pipeline::command_buffer::RenderCommand;
 
         if self.active == 0 {
             return 0;
@@ -328,14 +328,14 @@ impl<const N: usize> ParticleSystem<N> {
             };
 
             let _ = commands.push(RenderCommand::Draw(
-                crate::primitive::DrawPrimitive::ColoredTriangleWithDepth {
+                crate::pipeline::assemble::primitive::DrawPrimitive::ColoredTriangleWithDepth {
                     points: [pts1[0].xy(), pts1[1].xy(), pts1[2].xy()],
                     depths: [pts1[0].z as f32, pts1[1].z as f32, pts1[2].z as f32],
                     color,
                 },
             ));
             let _ = commands.push(RenderCommand::Draw(
-                crate::primitive::DrawPrimitive::ColoredTriangleWithDepth {
+                crate::pipeline::assemble::primitive::DrawPrimitive::ColoredTriangleWithDepth {
                     points: [pts2[0].xy(), pts2[1].xy(), pts2[2].xy()],
                     depths: [pts2[0].z as f32, pts2[1].z as f32, pts2[2].z as f32],
                     color,
@@ -484,14 +484,14 @@ mod tests {
         engine.camera.set_position(Point3::new(0.0, 0.0, 0.0));
         engine.camera.set_target(Point3::new(0.0, 0.0, 5.0));
 
-        let mut commands: crate::command_buffer::CommandBuffer<16> =
-            crate::command_buffer::CommandBuffer::new();
+        let mut commands: crate::pipeline::command_buffer::CommandBuffer<16> =
+            crate::pipeline::command_buffer::CommandBuffer::new();
         let emitted = sys.record(&engine, &mut commands);
         assert!(emitted > 0);
         assert!(!commands.is_empty());
 
-        let mut commands_grad: crate::command_buffer::CommandBuffer<16> =
-            crate::command_buffer::CommandBuffer::new();
+        let mut commands_grad: crate::pipeline::command_buffer::CommandBuffer<16> =
+            crate::pipeline::command_buffer::CommandBuffer::new();
         let curve_keys = [
             CurveKey::new(0.0, 1.0, CurveInterpolation::Linear),
             CurveKey::new(1.0, 0.5, CurveInterpolation::Linear),

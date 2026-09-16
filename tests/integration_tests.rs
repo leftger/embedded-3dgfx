@@ -1,16 +1,16 @@
 //! Integration tests for embedded-3dgfx
 //! These tests verify the full rendering pipeline works correctly
 
-use embedded_3dgfx::command_buffer::CommandBuffer;
 use embedded_3dgfx::config::ProfileCaps;
-use embedded_3dgfx::draw::draw;
 use embedded_3dgfx::error::{BudgetKind, RecoveryAction, RenderError};
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_3dgfx::renderer::FrameCtx;
-use embedded_3dgfx::telemetry::{ExecuteTelemetry, RecordTelemetry};
+use embedded_3dgfx::pipeline::command_buffer::CommandBuffer;
+use embedded_3dgfx::pipeline::rasterize::draw::draw;
 #[cfg(feature = "textured")]
-use embedded_3dgfx::texture::{Texture, TextureManager};
-use embedded_3dgfx::{Z_MAX_VALUE, engine::K3dengine, retro::RetroStyle};
+use embedded_3dgfx::pipeline::rasterize::texture::{Texture, TextureManager};
+use embedded_3dgfx::pipeline::renderer::FrameCtx;
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::telemetry::{ExecuteTelemetry, RecordTelemetry};
+use embedded_3dgfx::{Z_MAX_VALUE, engine::K3dengine, pipeline::shade::retro::RetroStyle};
 use embedded_graphics_core::pixelcolor::Rgb565;
 use embedded_graphics_core::prelude::*;
 use nalgebra::{Point3, Vector3};
@@ -892,7 +892,12 @@ fn test_legacy_render_count_matches_recorded_draw_count() {
 
     let recorded_draw_count = cmd
         .iter()
-        .filter(|c| matches!(c, embedded_3dgfx::command_buffer::RenderCommand::Draw(_)))
+        .filter(|c| {
+            matches!(
+                c,
+                embedded_3dgfx::pipeline::command_buffer::RenderCommand::Draw(_)
+            )
+        })
         .count();
 
     // Both paths produce the same number of draw commands
@@ -1983,11 +1988,11 @@ fn test_build_tile_bins_for_recorded_commands() {
         .record(std::iter::once(&mesh), &mut cmd, None)
         .unwrap();
 
-    let (_, stats) = embedded_3dgfx::tilebin::build_bins::<64, 64>(
+    let (_, stats) = embedded_3dgfx::pipeline::rasterize::tilebin::build_bins::<64, 64>(
         &cmd,
         64,
         64,
-        embedded_3dgfx::tilebin::TileConfig {
+        embedded_3dgfx::pipeline::rasterize::tilebin::TileConfig {
             tile_width: 16,
             tile_height: 16,
         },
@@ -2042,7 +2047,7 @@ fn test_tiled_execute_matches_non_tiled_pixel_count() {
             &mut fb_b,
             &mut frame_b,
             &cmd,
-            embedded_3dgfx::tilebin::TileConfig {
+            embedded_3dgfx::pipeline::rasterize::tilebin::TileConfig {
                 tile_width: 16,
                 tile_height: 16,
             },
@@ -2266,7 +2271,7 @@ fn test_matcap_record_and_execute_with_textures() {
 #[cfg(feature = "textured")]
 #[test]
 fn test_palettized_textures() {
-    use embedded_3dgfx::texture::Texture;
+    use embedded_3dgfx::pipeline::rasterize::texture::Texture;
 
     static PALETTE: [Rgb565; 4] = [
         Rgb565::CSS_RED,
@@ -2465,6 +2470,9 @@ fn test_toon_shading_and_outline_rendering() {
 }
 
 #[allow(dead_code)]
-fn _draw_helper(prim: embedded_3dgfx::primitive::DrawPrimitive, fb: &mut TestFramebuffer) {
+fn _draw_helper(
+    prim: embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive,
+    fb: &mut TestFramebuffer,
+) {
     draw(prim, fb);
 }

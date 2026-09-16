@@ -8,9 +8,11 @@
 
 extern crate std;
 
-use embedded_3dgfx::draw::{fast_blend_rgb565, fast_blend_rgba8888, fast_blend_rgba8888_to_rgb565};
+use embedded_3dgfx::pipeline::rasterize::draw::{
+    fast_blend_rgb565, fast_blend_rgba8888, fast_blend_rgba8888_to_rgb565,
+};
 #[cfg(feature = "textured")]
-use embedded_3dgfx::texture::Texture;
+use embedded_3dgfx::pipeline::rasterize::texture::Texture;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor, WebColors};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -373,7 +375,7 @@ fn test_billboard_fast_transform_matches_manual() {
 // 4. 2xSSAA — confirmed via draw_zbuffered_2xssaa API surface existence
 // ─────────────────────────────────────────────────────────────────────────────
 
-use embedded_3dgfx::primitive::DrawPrimitive;
+use embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive;
 use nalgebra::Point2;
 
 /// A minimal PixelRead + DrawTarget framebuffer for testing 2xSSAA.
@@ -418,7 +420,7 @@ impl embedded_graphics_core::draw_target::DrawTarget for MockFb {
     }
 }
 
-impl embedded_3dgfx::draw::PixelRead for MockFb {
+impl embedded_3dgfx::pipeline::rasterize::raster::aa::PixelRead for MockFb {
     fn get_pixel(&self, pt: embedded_graphics_core::prelude::Point) -> Rgb565 {
         if pt.x >= 0 && pt.y >= 0 && (pt.x as u32) < self.width && (pt.y as u32) < self.height {
             self.pixels[(pt.y as u32 * self.width + pt.x as u32) as usize]
@@ -446,7 +448,14 @@ fn test_translucent_triangle_blends_correctly() {
         alpha: 128,
     };
 
-    embedded_3dgfx::draw::draw_zbuffered_with_effects(prim, &mut fb, &mut zbuffer, 16, None, None);
+    embedded_3dgfx::pipeline::rasterize::draw::draw_zbuffered_with_effects(
+        prim,
+        &mut fb,
+        &mut zbuffer,
+        16,
+        None,
+        None,
+    );
 
     // alpha=128 blends half of red over pure black: r ≈ 15, g=0, b=0
     let px = fb.pixel_at(0, 0);
@@ -474,7 +483,7 @@ fn test_zbuffered_triangle_opaque_writes_z() {
         color: Rgb565::CSS_BLUE,
     };
 
-    embedded_3dgfx::draw::draw_zbuffered(prim, &mut fb, &mut zbuffer, 16);
+    embedded_3dgfx::pipeline::rasterize::draw::draw_zbuffered(prim, &mut fb, &mut zbuffer, 16);
     // z-buffer at (0,0) should have been written (no longer Z_MAX_VALUE)
     assert_ne!(
         zbuffer[0],
@@ -510,8 +519,8 @@ fn test_zbuffered_occlusion() {
         color: Rgb565::CSS_RED,
     };
 
-    embedded_3dgfx::draw::draw_zbuffered(near_prim, &mut fb, &mut zbuffer, 16);
-    embedded_3dgfx::draw::draw_zbuffered(far_prim, &mut fb, &mut zbuffer, 16);
+    embedded_3dgfx::pipeline::rasterize::draw::draw_zbuffered(near_prim, &mut fb, &mut zbuffer, 16);
+    embedded_3dgfx::pipeline::rasterize::draw::draw_zbuffered(far_prim, &mut fb, &mut zbuffer, 16);
 
     // Blue (near) must win — red is behind it
     assert_eq!(
@@ -565,7 +574,7 @@ fn test_rgba8888_premultiplied_white_over_black() {
 
 #[test]
 fn test_reverse_color_rgb565() {
-    use embedded_3dgfx::draw::reverse_color_rgb565;
+    use embedded_3dgfx::pipeline::rasterize::draw::reverse_color_rgb565;
     let black = Rgb565::new(0, 0, 0);
     let white = Rgb565::new(31, 63, 31);
     assert_eq!(
@@ -586,7 +595,7 @@ fn test_reverse_color_rgb565() {
 
 #[test]
 fn test_reverse_color_rgba8888() {
-    use embedded_3dgfx::draw::reverse_color_rgba8888;
+    use embedded_3dgfx::pipeline::rasterize::draw::reverse_color_rgba8888;
     let color = [255, 0, 100, 128];
     let inverted = reverse_color_rgba8888(color);
     assert_eq!(

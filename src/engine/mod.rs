@@ -1,18 +1,21 @@
+//! The K3dengine facade: camera, render settings, and record/execute entry points.
+
 use core::fmt::Debug;
 use embedded_graphics_core::draw_target::DrawTarget;
 use embedded_graphics_core::geometry::OriginDimensions;
 use embedded_graphics_core::pixelcolor::Rgb565;
 use nalgebra::{Matrix4, Point3, Vector3, Vector4};
 
-use crate::camera::Camera;
-use crate::command_buffer::CommandBuffer;
 use crate::error::RenderError;
-use crate::mesh::{K3dMesh, RenderMode};
-use crate::primitive::DrawPrimitive;
+use crate::pipeline::assemble::primitive::DrawPrimitive;
+use crate::pipeline::command_buffer::CommandBuffer;
+use crate::pipeline::vertex::camera::Camera;
+use crate::pipeline::vertex::mesh::{K3dMesh, RenderMode};
 
-mod pipeline;
+mod immediate;
 mod recording;
-mod transform;
+
+use crate::pipeline::vertex::transform;
 
 pub struct K3dengine {
     pub camera: Camera,
@@ -22,27 +25,27 @@ pub struct K3dengine {
     pub(crate) quality_tier: crate::config::QualityTier,
     pub(crate) material_profile: crate::config::MaterialProfile,
     /// Depth-based fog applied during `execute` / `execute_tiled`.
-    pub(crate) fog: Option<crate::draw::FogConfig>,
+    pub(crate) fog: Option<crate::pipeline::effects::FogConfig>,
     /// Ordered dithering applied during `execute` / `execute_tiled`.
-    pub(crate) dither: Option<crate::draw::DitherConfig>,
+    pub(crate) dither: Option<crate::pipeline::effects::DitherConfig>,
     /// Optional NDC snap precision for retro-style vertex jitter.
     pub(crate) vertex_snap_bits: u8,
     /// Texture interpolation mode for textured raster paths.
-    pub(crate) texture_mapping: crate::retro::TextureMapping,
+    pub(crate) texture_mapping: crate::pipeline::shade::retro::texture_lod::TextureMapping,
     /// Sector brightness behavior.
-    pub(crate) light_levels: crate::retro::LightLevels,
+    pub(crate) light_levels: crate::pipeline::shade::retro::light_levels::LightLevels,
     /// Optional stipple mode for textured/lightmapped passes.
-    pub(crate) stipple_mode: crate::retro::StippleMode,
+    pub(crate) stipple_mode: crate::pipeline::shade::retro::stipple::StippleMode,
     /// Optional full-screen tint blended during rasterization.
-    pub(crate) screen_tint: Option<crate::retro::ScreenTint>,
+    pub(crate) screen_tint: Option<crate::pipeline::shade::retro::tint::ScreenTint>,
     /// Optional palette quantization.
-    pub(crate) palette_mode: crate::retro::PaletteMode,
+    pub(crate) palette_mode: crate::pipeline::shade::retro::palette::PaletteMode,
     /// Optional sky background rendered before scene geometry.
-    pub(crate) sky: Option<crate::retro::SkyConfig>,
+    pub(crate) sky: Option<crate::pipeline::shade::retro::sky::SkyConfig>,
     /// Runtime point lights (max 16).  Applied at face-centre granularity
     /// during `record` for mesh geometry and at face level for BSP.
     #[cfg(feature = "lighting")]
-    pub(crate) point_lights: heapless::Vec<crate::lights::PointLight, 16>,
+    pub(crate) point_lights: heapless::Vec<crate::pipeline::shade::lights::PointLight, 16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,6 +63,18 @@ pub struct DegradationOutcome {
     pub primary_budget_error: Option<crate::error::BudgetKind>,
 }
 
+impl crate::config::CapSink for K3dengine {
+    fn set_caps(&mut self, caps: crate::config::ProfileCaps) {
+        K3dengine::set_caps(self, caps);
+    }
+    fn clear_caps(&mut self) {
+        K3dengine::clear_caps(self);
+    }
+    fn apply_render_defaults(&mut self, defaults: crate::config::RenderDefaults) {
+        K3dengine::apply_render_defaults(self, defaults);
+    }
+}
+
 impl K3dengine {
     pub fn new(width: u16, height: u16) -> K3dengine {
         K3dengine {
@@ -72,11 +87,12 @@ impl K3dengine {
             fog: None,
             dither: None,
             vertex_snap_bits: 0,
-            texture_mapping: crate::retro::TextureMapping::PerspectiveCorrect,
-            light_levels: crate::retro::LightLevels::Linear,
-            stipple_mode: crate::retro::StippleMode::Off,
+            texture_mapping:
+                crate::pipeline::shade::retro::texture_lod::TextureMapping::PerspectiveCorrect,
+            light_levels: crate::pipeline::shade::retro::light_levels::LightLevels::Linear,
+            stipple_mode: crate::pipeline::shade::retro::stipple::StippleMode::Off,
             screen_tint: None,
-            palette_mode: crate::retro::PaletteMode::Off,
+            palette_mode: crate::pipeline::shade::retro::palette::PaletteMode::Off,
             sky: None,
             #[cfg(feature = "lighting")]
             point_lights: heapless::Vec::new(),
@@ -84,7 +100,7 @@ impl K3dengine {
     }
 
     /// Enable depth-based fog for subsequent [`execute`][Self::execute] calls.
-    pub fn set_fog(&mut self, fog: crate::draw::FogConfig) {
+    pub fn set_fog(&mut self, fog: crate::pipeline::effects::FogConfig) {
         self.fog = Some(fog);
     }
 
@@ -94,7 +110,7 @@ impl K3dengine {
     }
 
     /// Enable ordered dithering for subsequent execute passes.
-    pub fn set_dither(&mut self, dither: crate::draw::DitherConfig) {
+    pub fn set_dither(&mut self, dither: crate::pipeline::effects::DitherConfig) {
         self.dither = Some(dither);
     }
 
@@ -109,22 +125,28 @@ impl K3dengine {
     }
 
     /// Select texture interpolation mode.
-    pub fn set_texture_mapping(&mut self, mapping: crate::retro::TextureMapping) {
+    pub fn set_texture_mapping(
+        &mut self,
+        mapping: crate::pipeline::shade::retro::texture_lod::TextureMapping,
+    ) {
         self.texture_mapping = mapping;
     }
 
     /// Select sector light quantization model.
-    pub fn set_light_levels(&mut self, levels: crate::retro::LightLevels) {
+    pub fn set_light_levels(
+        &mut self,
+        levels: crate::pipeline::shade::retro::light_levels::LightLevels,
+    ) {
         self.light_levels = levels;
     }
 
     /// Set stipple mode used by textured/lightmapped raster paths.
-    pub fn set_stipple_mode(&mut self, mode: crate::retro::StippleMode) {
+    pub fn set_stipple_mode(&mut self, mode: crate::pipeline::shade::retro::stipple::StippleMode) {
         self.stipple_mode = mode;
     }
 
     /// Set an optional full-screen tint.
-    pub fn set_screen_tint(&mut self, tint: crate::retro::ScreenTint) {
+    pub fn set_screen_tint(&mut self, tint: crate::pipeline::shade::retro::tint::ScreenTint) {
         self.screen_tint = Some(tint);
     }
 
@@ -134,12 +156,12 @@ impl K3dengine {
     }
 
     /// Set output palette quantization mode.
-    pub fn set_palette_mode(&mut self, mode: crate::retro::PaletteMode) {
+    pub fn set_palette_mode(&mut self, mode: crate::pipeline::shade::retro::palette::PaletteMode) {
         self.palette_mode = mode;
     }
 
     /// Set procedural sky rendering parameters.
-    pub fn set_sky(&mut self, sky: crate::retro::SkyConfig) {
+    pub fn set_sky(&mut self, sky: crate::pipeline::shade::retro::sky::SkyConfig) {
         self.sky = Some(sky);
     }
 
@@ -149,7 +171,7 @@ impl K3dengine {
     }
 
     /// Apply a coarse retro visual preset.
-    pub fn apply_retro_style(&mut self, style: crate::retro::RetroStyle) {
+    pub fn apply_retro_style(&mut self, style: crate::pipeline::shade::retro::style::RetroStyle) {
         self.fog = style.fog;
         self.dither = style.dither;
         self.set_vertex_snap_bits(style.vertex_snap_bits);
@@ -161,9 +183,38 @@ impl K3dengine {
         self.sky = style.sky;
     }
 
+    /// Snapshot the engine's raster configuration for a frame of the given size.
+    ///
+    /// This is the single place where engine-level effects (fog / dither / tint /
+    /// palette / stipple / texture mapping / sky / camera direction) are lowered
+    /// into the [`RasterState`](crate::pipeline::rasterize::draw::state::RasterState)
+    /// that both the rasterizers *and* the execute driver consume, so there is one
+    /// representation of the pass rather than one per entry point. Use it to drive
+    /// [`draw_zbuffered_with_state`](crate::pipeline::rasterize::draw::zbuffered::draw_zbuffered_with_state)
+    /// or a custom rasterizer with exactly the effects the engine would apply.
+    #[must_use]
+    pub fn raster_state(
+        &self,
+        width: usize,
+        height: usize,
+    ) -> crate::pipeline::rasterize::draw::state::RasterState<'_> {
+        crate::pipeline::rasterize::draw::state::RasterState::new(width, height)
+            .with_fog(self.fog.as_ref())
+            .with_dither(self.dither.as_ref())
+            .with_screen_tint(self.screen_tint)
+            .with_stipple_mode(self.stipple_mode)
+            .with_palette_mode(self.palette_mode)
+            .with_texture_mapping(self.texture_mapping)
+            .with_sky(self.sky)
+            .with_camera_dir({
+                let d = self.camera.get_direction();
+                [d.x, d.y, d.z]
+            })
+    }
+
     /// Add a dynamic point light. Returns `false` when the 16-light limit is reached.
     #[cfg(feature = "lighting")]
-    pub fn add_point_light(&mut self, light: crate::lights::PointLight) -> bool {
+    pub fn add_point_light(&mut self, light: crate::pipeline::shade::lights::PointLight) -> bool {
         self.point_lights.push(light).is_ok()
     }
 
@@ -177,14 +228,14 @@ impl K3dengine {
     #[allow(dead_code)]
     #[inline]
     pub(crate) fn light_tint_at(&self, world_pos: Point3<f32>) -> Rgb565 {
-        pipeline::light_tint_at(self, world_pos)
+        immediate::light_tint_at(self, world_pos)
     }
 
     #[cfg(feature = "lighting")]
     #[allow(dead_code)]
     #[inline]
     pub(crate) fn add_tint(base: Rgb565, tint: Rgb565) -> Rgb565 {
-        pipeline::add_tint(base, tint)
+        immediate::add_tint(base, tint)
     }
 
     #[cfg(feature = "lighting")]
@@ -196,7 +247,7 @@ impl K3dengine {
         brightness: u8,
         face_center: Point3<f32>,
     ) -> Rgb565 {
-        pipeline::sector_shaded_color(self, base, brightness, face_center)
+        immediate::sector_shaded_color(self, base, brightness, face_center)
     }
 
     #[cfg(feature = "lighting")]
@@ -207,7 +258,7 @@ impl K3dengine {
         vertices: &[[f32; 3]],
         model_matrix: Matrix4<f32>,
     ) -> Point3<f32> {
-        pipeline::face_world_center(face, vertices, model_matrix)
+        immediate::face_world_center(face, vertices, model_matrix)
     }
 
     pub fn set_caps(&mut self, caps: crate::config::ProfileCaps) {
@@ -364,7 +415,7 @@ impl K3dengine {
         MS: IntoIterator<Item = &'a K3dMesh<'a>>,
         F: FnMut(DrawPrimitive),
     {
-        pipeline::render(self, meshes, callback);
+        immediate::render(self, meshes, callback);
     }
 
     pub fn record<'a, MS, const MAX: usize>(
@@ -447,10 +498,10 @@ impl K3dengine {
     pub fn execute<D, const MAX: usize>(
         &self,
         fb: &mut D,
-        frame: &mut crate::renderer::FrameCtx<'_>,
+        frame: &mut crate::pipeline::renderer::FrameCtx<'_>,
         commands: &CommandBuffer<MAX>,
         telemetry: Option<&mut crate::telemetry::ExecuteTelemetry>,
-    ) -> Result<Option<crate::renderer::DirtyRegion>, RenderError>
+    ) -> Result<Option<crate::pipeline::renderer::DirtyRegion>, RenderError>
     where
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
@@ -462,11 +513,11 @@ impl K3dengine {
     pub fn execute_with_textures<D, const MAX: usize, const N: usize>(
         &self,
         fb: &mut D,
-        frame: &mut crate::renderer::FrameCtx<'_>,
+        frame: &mut crate::pipeline::renderer::FrameCtx<'_>,
         commands: &CommandBuffer<MAX>,
-        texture_manager: &crate::texture::TextureManager<N>,
+        texture_manager: &crate::pipeline::rasterize::texture::TextureManager<N>,
         telemetry: Option<&mut crate::telemetry::ExecuteTelemetry>,
-    ) -> Result<Option<crate::renderer::DirtyRegion>, RenderError>
+    ) -> Result<Option<crate::pipeline::renderer::DirtyRegion>, RenderError>
     where
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
@@ -477,10 +528,10 @@ impl K3dengine {
     pub fn execute_tiled<D, const MAX: usize, const BIN_CAP: usize>(
         &self,
         fb: &mut D,
-        frame: &mut crate::renderer::FrameCtx<'_>,
+        frame: &mut crate::pipeline::renderer::FrameCtx<'_>,
         commands: &CommandBuffer<MAX>,
-        tile: crate::tilebin::TileConfig,
-    ) -> Result<crate::tilebin::TileBinStats, RenderError>
+        tile: crate::pipeline::rasterize::tilebin::TileConfig,
+    ) -> Result<crate::pipeline::rasterize::tilebin::TileBinStats, RenderError>
     where
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
@@ -491,7 +542,7 @@ impl K3dengine {
     #[cfg(feature = "gizmos")]
     pub fn record_aabb_gizmo<const MAX: usize>(
         &self,
-        aabb: &crate::bounds::Aabb,
+        aabb: &crate::pipeline::vertex::bounds::Aabb,
         model_matrix: &Matrix4<f32>,
         color: Rgb565,
         commands: &mut CommandBuffer<MAX>,

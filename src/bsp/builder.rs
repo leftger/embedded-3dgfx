@@ -351,8 +351,8 @@ pub fn build_room_strip(rooms: &[RoomSpec]) -> Result<OwnedBspWorld, BuildError>
 mod tests {
     use super::*;
     use crate::bsp::scratch::BspScratch;
-    use crate::command_buffer::{CommandBuffer, RenderCommand};
     use crate::engine::K3dengine;
+    use crate::pipeline::command_buffer::{CommandBuffer, RenderCommand};
     use nalgebra::Point3;
 
     #[test]

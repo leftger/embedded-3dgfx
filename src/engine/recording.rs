@@ -1,3 +1,5 @@
+//! Scene traversal that records meshes into a command buffer.
+
 use core::fmt::Debug;
 use embedded_graphics_core::draw_target::DrawTarget;
 use embedded_graphics_core::geometry::OriginDimensions;
@@ -5,13 +7,13 @@ use embedded_graphics_core::pixelcolor::Rgb565;
 use nalgebra::Point3;
 
 use super::K3dengine;
-use super::pipeline::render;
-use super::transform::{should_cull_mesh, transform_point_with_w};
-use crate::command_buffer::{CommandBuffer, RenderCommand};
+use super::immediate::render;
 use crate::config::{DegradationPolicy, DegradationStep, QualityTier};
 use crate::error::{BudgetKind, RecoveryAction, RenderError, RuntimeFaultKind};
-use crate::mesh::K3dMesh;
-use crate::primitive::DrawPrimitive;
+use crate::pipeline::assemble::primitive::DrawPrimitive;
+use crate::pipeline::command_buffer::{CommandBuffer, RenderCommand};
+use crate::pipeline::vertex::mesh::K3dMesh;
+use crate::pipeline::vertex::transform::{should_cull_mesh, transform_point_with_w};
 
 pub(crate) fn record<'a, MS, const MAX: usize>(
     engine: &K3dengine,
@@ -251,14 +253,14 @@ pub(crate) fn record_one_mesh<'a, const MAX: usize>(
     #[cfg(feature = "lod-crossfade")]
     {
         match mesh.select_lod_pick(distance) {
-            crate::mesh::LodPick::Single(_) => {
+            crate::pipeline::vertex::mesh::LodPick::Single(_) => {
                 mesh.lod_force.set(None);
                 mesh.draw_alpha.set(None);
                 render(engine, core::iter::once(mesh), |primitive| {
                     push_draw(primitive, first_error);
                 });
             }
-            crate::mesh::LodPick::Crossfade { near, far, t } => {
+            crate::pipeline::vertex::mesh::LodPick::Crossfade { near, far, t } => {
                 let near_lvl = mesh.lod_level_of(near);
                 let far_lvl = mesh.lod_level_of(far);
                 if t < 0.5 {
@@ -467,10 +469,10 @@ pub(crate) fn record_with_degradation<'a, const MAX: usize>(
 pub(crate) fn execute<D, const MAX: usize>(
     engine: &K3dengine,
     fb: &mut D,
-    frame: &mut crate::renderer::FrameCtx<'_>,
+    frame: &mut crate::pipeline::renderer::FrameCtx<'_>,
     commands: &CommandBuffer<MAX>,
     telemetry: Option<&mut crate::telemetry::ExecuteTelemetry>,
-) -> Result<Option<crate::renderer::DirtyRegion>, RenderError>
+) -> Result<Option<crate::pipeline::renderer::DirtyRegion>, RenderError>
 where
     D: DrawTarget<Color = Rgb565> + OriginDimensions,
     D::Error: Debug,
@@ -490,30 +492,19 @@ where
             .filter(|cmd| matches!(cmd, RenderCommand::ClearDepth(_)))
             .count();
     }
-    let camera_dir = engine.camera.get_direction();
-    crate::renderer::execute_commands_with_dirty_region_effects(
-        fb,
-        frame,
-        commands,
-        engine.fog.as_ref(),
-        engine.dither.as_ref(),
-        engine.screen_tint,
-        engine.stipple_mode,
-        engine.palette_mode,
-        engine.sky,
-        [camera_dir.x, camera_dir.y, camera_dir.z],
-    )
+    let state = engine.raster_state(frame.width, frame.height);
+    crate::pipeline::renderer::execute_commands(fb, frame, commands, &state)
 }
 
 #[cfg(feature = "textured")]
 pub(crate) fn execute_with_textures<D, const MAX: usize, const N: usize>(
     engine: &K3dengine,
     fb: &mut D,
-    frame: &mut crate::renderer::FrameCtx<'_>,
+    frame: &mut crate::pipeline::renderer::FrameCtx<'_>,
     commands: &CommandBuffer<MAX>,
-    texture_manager: &crate::texture::TextureManager<N>,
+    texture_manager: &crate::pipeline::rasterize::texture::TextureManager<N>,
     telemetry: Option<&mut crate::telemetry::ExecuteTelemetry>,
-) -> Result<Option<crate::renderer::DirtyRegion>, RenderError>
+) -> Result<Option<crate::pipeline::renderer::DirtyRegion>, RenderError>
 where
     D: DrawTarget<Color = Rgb565> + OriginDimensions,
     D::Error: Debug,
@@ -533,53 +524,37 @@ where
             .filter(|cmd| matches!(cmd, RenderCommand::ClearDepth(_)))
             .count();
     }
-    let camera_dir = engine.camera.get_direction();
-    crate::renderer::execute_commands_with_dirty_region_effects_textured(
+    let state = engine.raster_state(frame.width, frame.height);
+    crate::pipeline::renderer::execute_commands_textured(
         fb,
         frame,
         commands,
         texture_manager,
-        engine.fog.as_ref(),
-        engine.dither.as_ref(),
-        engine.screen_tint,
-        engine.stipple_mode,
-        engine.palette_mode,
-        engine.sky,
-        [camera_dir.x, camera_dir.y, camera_dir.z],
+        &state,
     )
 }
 
 pub(crate) fn execute_tiled<D, const MAX: usize, const BIN_CAP: usize>(
     engine: &K3dengine,
     fb: &mut D,
-    frame: &mut crate::renderer::FrameCtx<'_>,
+    frame: &mut crate::pipeline::renderer::FrameCtx<'_>,
     commands: &CommandBuffer<MAX>,
-    tile: crate::tilebin::TileConfig,
-) -> Result<crate::tilebin::TileBinStats, RenderError>
+    tile: crate::pipeline::rasterize::tilebin::TileConfig,
+) -> Result<crate::pipeline::rasterize::tilebin::TileBinStats, RenderError>
 where
     D: DrawTarget<Color = Rgb565> + OriginDimensions,
     D::Error: Debug,
 {
-    let camera_dir = engine.camera.get_direction();
-    crate::renderer::execute_commands_tiled_effects::<D, MAX, BIN_CAP>(
-        fb,
-        frame,
-        commands,
-        tile,
-        engine.fog.as_ref(),
-        engine.dither.as_ref(),
-        engine.screen_tint,
-        engine.stipple_mode,
-        engine.palette_mode,
-        engine.sky,
-        [camera_dir.x, camera_dir.y, camera_dir.z],
+    let state = engine.raster_state(frame.width, frame.height);
+    crate::pipeline::renderer::execute_commands_tiled::<D, MAX, BIN_CAP>(
+        fb, frame, commands, tile, &state,
     )
 }
 
 #[cfg(feature = "gizmos")]
 pub(crate) fn record_aabb_gizmo<const MAX: usize>(
     engine: &K3dengine,
-    aabb: &crate::bounds::Aabb,
+    aabb: &crate::pipeline::vertex::bounds::Aabb,
     model_matrix: &nalgebra::Matrix4<f32>,
     color: Rgb565,
     commands: &mut CommandBuffer<MAX>,
@@ -589,7 +564,7 @@ pub(crate) fn record_aabb_gizmo<const MAX: usize>(
         aabb,
         model_matrix,
         |p| {
-            crate::engine::transform::transform_point(
+            crate::pipeline::vertex::transform::transform_point(
                 &engine.camera,
                 engine.width,
                 engine.height,
@@ -622,7 +597,7 @@ pub(crate) fn record_frustum_gizmo<const MAX: usize>(
     crate::gizmos::emit_frustum_wireframe(
         &engine.camera,
         |p| {
-            crate::engine::transform::transform_point(
+            crate::pipeline::vertex::transform::transform_point(
                 &engine.camera,
                 engine.width,
                 engine.height,
@@ -648,7 +623,7 @@ pub(crate) fn record_frustum_gizmo<const MAX: usize>(
 #[cfg(all(test, feature = "gizmos"))]
 mod tests {
     use super::*;
-    use crate::bounds::Aabb;
+    use crate::pipeline::vertex::bounds::Aabb;
     use embedded_graphics_core::pixelcolor::RgbColor;
     use nalgebra::{Matrix4, Point3, Vector3};
 

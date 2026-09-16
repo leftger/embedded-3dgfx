@@ -9,7 +9,7 @@ use embassy_sync::waitqueue::WakerRegistration;
 use embedded_graphics_core::pixelcolor::Rgb565;
 use embedded_graphics_framebuf::{FrameBuf, backends::DMACapableFrameBufferBackend};
 
-use crate::display_backend::{AsyncDmaTransfer, DmaTransfer};
+use crate::pipeline::output::display_backend::{AsyncDmaTransfer, DmaTransfer};
 
 /// DMA transfer token using Embassy's [`WakerRegistration`] wake path.
 pub struct EmbassyWaitTransfer<FB>

@@ -1,3 +1,5 @@
+//! Board / silicon capability profiles used to pick rendering budgets.
+
 use core::sync::atomic::{AtomicU32, Ordering};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

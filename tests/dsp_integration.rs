@@ -22,7 +22,7 @@ fn test_dsp_skeleton_slerp() {
 #[cfg(feature = "dsp")]
 #[test]
 fn test_dsp_camera_smooth_track() {
-    use embedded_3dgfx::camera::Camera;
+    use embedded_3dgfx::pipeline::vertex::camera::Camera;
     use nalgebra::Point3;
 
     let mut camera = Camera::new(1.0);

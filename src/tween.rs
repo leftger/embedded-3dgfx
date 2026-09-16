@@ -1,7 +1,7 @@
 //! Time-based interpolation and easing for boot sequences and UI motion.
 //!
 //! All functions are `no_std` and heap-free. Pair with [`crate::transform_anim::AnimationPlayer`]
-//! for keyframed motion, or drive [`K3dMesh`](crate::mesh::K3dMesh) transforms directly each frame.
+//! for keyframed motion, or drive [`K3dMesh`](crate::pipeline::vertex::mesh::K3dMesh) transforms directly each frame.
 
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 

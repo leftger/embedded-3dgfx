@@ -1,8 +1,8 @@
 use embedded_3dgfx::absm::*;
-use embedded_3dgfx::bounds::*;
-use embedded_3dgfx::camera::Ray;
-use embedded_3dgfx::lights::*;
 use embedded_3dgfx::physics::*;
+use embedded_3dgfx::pipeline::shade::lights::*;
+use embedded_3dgfx::pipeline::vertex::bounds::*;
+use embedded_3dgfx::pipeline::vertex::camera::Ray;
 use embedded_3dgfx::pool::*;
 use embedded_3dgfx::ray_primitive::*;
 use embedded_3dgfx::tween::*;

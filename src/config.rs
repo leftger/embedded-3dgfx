@@ -1,3 +1,5 @@
+//! Quality tiers, material profiles, and per-MCU capability profiles.
+
 use crate::error::{BudgetKind, RenderError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,15 +114,8 @@ pub const PROFILE_M3_BALANCED: ProfileCaps = ProfileCaps {
     max_vertices_per_mesh: 3_072,
 };
 
-pub const PROFILE_M4_BALANCED: ProfileCaps = ProfileCaps {
-    max_draw_primitives: 2_048,
-    max_meshes_per_frame: 128,
-    max_textures: 8,
-    max_width: 320,
-    max_height: 240,
-    max_triangles_per_mesh: 4_096,
-    max_vertices_per_mesh: 4_096,
-};
+/// M4 caps coincide with the M33-balanced envelope.
+pub const PROFILE_M4_BALANCED: ProfileCaps = PROFILE_M33_BALANCED;
 
 pub const PROFILE_M33_BALANCED: ProfileCaps = ProfileCaps {
     max_draw_primitives: 2_048,
@@ -132,15 +127,9 @@ pub const PROFILE_M33_BALANCED: ProfileCaps = ProfileCaps {
     max_vertices_per_mesh: 4_096,
 };
 
-pub const PROFILE_M33_SECURE: ProfileCaps = ProfileCaps {
-    max_draw_primitives: 2_048,
-    max_meshes_per_frame: 128,
-    max_textures: 8,
-    max_width: 320,
-    max_height: 240,
-    max_triangles_per_mesh: 4_096,
-    max_vertices_per_mesh: 4_096,
-};
+/// Secure M33 shares the balanced budget here (kept as a distinct name for
+/// board-facing call sites).
+pub const PROFILE_M33_SECURE: ProfileCaps = PROFILE_M33_BALANCED;
 
 pub const PROFILE_M55_PERF: ProfileCaps = ProfileCaps {
     max_draw_primitives: 4_096,
@@ -202,13 +191,23 @@ pub fn default_profile_caps() -> Option<ProfileCaps> {
     Some(DEFAULT_PROFILE_CAPS)
 }
 
-pub fn apply_default_caps(engine: &mut crate::engine::K3dengine) {
+/// Sink for the render-cap setters that [`apply_default_caps`] drives.
+///
+/// Implemented by the engine. Keeping this a trait means the `config` layer
+/// does not have to depend on the engine layer.
+pub trait CapSink {
+    fn set_caps(&mut self, caps: ProfileCaps);
+    fn clear_caps(&mut self);
+    fn apply_render_defaults(&mut self, defaults: RenderDefaults);
+}
+
+pub fn apply_default_caps(sink: &mut impl CapSink) {
     if let Some(caps) = default_profile_caps() {
-        engine.set_caps(caps);
-        engine.apply_render_defaults(render_defaults_for_profile(caps));
+        sink.set_caps(caps);
+        sink.apply_render_defaults(render_defaults_for_profile(caps));
     } else {
-        engine.clear_caps();
-        engine.apply_render_defaults(RenderDefaults::default());
+        sink.clear_caps();
+        sink.apply_render_defaults(RenderDefaults::default());
     }
 }
 
@@ -257,6 +256,26 @@ mod tests {
         assert_eq!(policy.steps.len(), 3);
     }
 
+    /// Records what `apply_default_caps` pushed, without pulling the engine in.
+    #[derive(Default)]
+    struct RecordingSink {
+        caps: Option<ProfileCaps>,
+        cleared: bool,
+        defaults: Option<RenderDefaults>,
+    }
+
+    impl CapSink for RecordingSink {
+        fn set_caps(&mut self, caps: ProfileCaps) {
+            self.caps = Some(caps);
+        }
+        fn clear_caps(&mut self) {
+            self.cleared = true;
+        }
+        fn apply_render_defaults(&mut self, defaults: RenderDefaults) {
+            self.defaults = Some(defaults);
+        }
+    }
+
     #[test]
     fn test_default_profile_caps_and_apply() {
         if let Some(caps) = default_profile_caps() {
@@ -264,8 +283,11 @@ mod tests {
                 caps.max_draw_primitives,
                 DEFAULT_PROFILE_CAPS.max_draw_primitives
             );
-            let mut engine = crate::engine::K3dengine::new(16, 16);
-            apply_default_caps(&mut engine);
+            let mut sink = RecordingSink::default();
+            apply_default_caps(&mut sink);
+            assert_eq!(sink.caps, Some(caps));
+            assert!(!sink.cleared);
+            assert!(sink.defaults.is_some());
         }
     }
 }

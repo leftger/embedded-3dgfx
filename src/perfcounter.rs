@@ -1,3 +1,5 @@
+//! Lightweight frame/timing counters for perfcounter builds.
+
 use crate::hardware_profile;
 use core::fmt::Write;
 use core::mem;

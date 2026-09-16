@@ -27,8 +27,8 @@ use embedded_graphics_core::{
 };
 use embedded_graphics_framebuf::{FrameBuf, backends::FrameBufferBackend};
 
-use crate::draw::draw;
-use crate::primitive::DrawPrimitive;
+use crate::pipeline::assemble::primitive::DrawPrimitive;
+use crate::pipeline::rasterize::draw::fill::draw;
 
 // ── 1. Color adapter ─────────────────────────────────────────────────────────
 
@@ -158,13 +158,13 @@ impl FrameBufferBackend for SliceBackend<'_> {
 /// pixel buffer, ready to be used as a 3D texture.
 ///
 /// `width` and `height` must be powers of two (required by
-/// [`Texture::new`](crate::texture::Texture::new)), and `buffer.len()` must
+/// [`Texture::new`](crate::pipeline::rasterize::texture::Texture::new)), and `buffer.len()` must
 /// equal `width * height`.
 ///
 /// # Usage
 ///
 /// ```ignore
-/// use embedded_3dgfx::{bridge::render_drawable_to_buffer, texture::Texture};
+/// use embedded_3dgfx::{bridge::render_drawable_to_buffer, pipeline::rasterize::texture::Texture};
 /// use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 ///
 /// static mut BUF: [Rgb565; 32 * 32] = [Rgb565::BLACK; 32 * 32];
@@ -288,9 +288,9 @@ where
 pub fn reconstruct_checkerboard_row(
     row: &mut [Rgb565],
     y: usize,
-    field: crate::draw::effects::CheckerboardField,
+    field: crate::pipeline::effects::CheckerboardField,
 ) {
-    if field == crate::draw::effects::CheckerboardField::Disabled || row.len() < 2 {
+    if field == crate::pipeline::effects::CheckerboardField::Disabled || row.len() < 2 {
         return;
     }
     let len = row.len();
@@ -306,7 +306,7 @@ pub fn reconstruct_checkerboard_row(
             } else {
                 row[x.saturating_sub(1)]
             };
-            row[x] = crate::shader::blend::fast_blend_rgb565(left, right, 128);
+            row[x] = crate::pipeline::shade::shader::blend::fast_blend_rgb565(left, right, 128);
         }
     }
 }
@@ -316,9 +316,9 @@ pub fn reconstruct_checkerboard_buffer(
     fb: &mut [Rgb565],
     width: usize,
     height: usize,
-    field: crate::draw::effects::CheckerboardField,
+    field: crate::pipeline::effects::CheckerboardField,
 ) {
-    if field == crate::draw::effects::CheckerboardField::Disabled || width == 0 {
+    if field == crate::pipeline::effects::CheckerboardField::Disabled || width == 0 {
         return;
     }
     for y in 0..height {
@@ -425,7 +425,7 @@ mod tests {
 
     #[test]
     fn test_reconstruct_checkerboard() {
-        use crate::draw::effects::CheckerboardField;
+        use crate::pipeline::effects::CheckerboardField;
         // Even field: (0,0) valid, (1,0) missing, (2,0) valid
         let mut row = [Rgb565::RED, Rgb565::BLACK, Rgb565::RED];
         reconstruct_checkerboard_row(&mut row, 0, CheckerboardField::Even);

@@ -1,3 +1,5 @@
+//! Cooperative, non-blocking scene loading and upload.
+
 use crate::error::{RecoveryAction, RenderError, RuntimeFaultKind, StallKind};
 use crate::scene_format::{ChunkCursor, ChunkKind, SceneChunkRef};
 
