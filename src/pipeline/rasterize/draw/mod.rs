@@ -25,11 +25,13 @@ pub use fill::{draw, fill_triangle};
 pub use fixed::{fill_triangle_fixed, fill_triangle_zbuffered_fixed};
 pub use state::RasterState;
 #[cfg(all(feature = "textured", feature = "raycast"))]
-pub use textured::draw_bsp_coverage;
+pub use textured::coverage::draw_bsp_coverage;
+#[cfg(feature = "textured")]
+pub use textured::lightmap::{draw_zbuffered_lightmapped, draw_zbuffered_lightmapped_mapped};
 #[cfg(feature = "textured")]
 pub use textured::{
-    draw_zbuffered_lightmapped, draw_zbuffered_lightmapped_mapped, draw_zbuffered_with_textures,
-    draw_zbuffered_with_textures_mapped, draw_zbuffered_with_textures_state,
+    draw_zbuffered_with_textures, draw_zbuffered_with_textures_mapped,
+    draw_zbuffered_with_textures_state,
 };
 pub use zbuffered::{
     draw_zbuffered, draw_zbuffered_with_bias, draw_zbuffered_with_effects,
@@ -262,7 +264,7 @@ mod tests {
         let z1 = 10000u32;
         let z2 = 90000u32;
 
-        zbuffered::draw_scanline_zbuffered(
+        zbuffered::flat::draw_scanline_zbuffered(
             x1,
             x2,
             y,
@@ -301,7 +303,7 @@ mod tests {
         let mut zbuffer = std::vec![crate::Z_MAX_VALUE; width * 5];
         let mut fb = MockFramebuffer::new();
 
-        zbuffered::draw_scanline_zbuffered(
+        zbuffered::flat::draw_scanline_zbuffered(
             10,
             20,
             2,
@@ -315,7 +317,7 @@ mod tests {
             None,
         );
 
-        zbuffered::draw_scanline_zbuffered(
+        zbuffered::flat::draw_scanline_zbuffered(
             10,
             20,
             2,
@@ -334,7 +336,7 @@ mod tests {
             assert_eq!(zbuffer[idx], crate::to_zdepth(20000 << 16));
         }
 
-        zbuffered::draw_scanline_zbuffered(
+        zbuffered::flat::draw_scanline_zbuffered(
             10,
             20,
             2,

@@ -992,9 +992,8 @@ where
     D: DrawTarget<Color = Rgb565> + OriginDimensions,
     D::Error: Debug,
 {
-    use crate::pipeline::rasterize::draw::textured::{
-        draw_zbuffered_lightmapped_mapped, draw_zbuffered_with_textures_state,
-    };
+    use crate::pipeline::rasterize::draw::textured::draw_zbuffered_with_textures_state;
+    use crate::pipeline::rasterize::draw::textured::lightmap::draw_zbuffered_lightmapped_mapped;
     frame.validate()?;
     let mut dirty_bounds: Option<(i32, i32, i32, i32)> = None;
     if let Some(sky_cfg) = state.sky {

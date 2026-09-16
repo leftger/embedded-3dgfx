@@ -40,7 +40,7 @@ pub fn draw_zbuffered_aa<T: ReadPixel + DrawTarget<Color = Rgb565>>(
             depths,
             color,
         } => {
-            super::zbuffered::fill_triangle_zbuffered(
+            super::zbuffered::flat::fill_triangle_zbuffered(
                 points[0], points[1], points[2], depths[0], depths[1], depths[2], color, fb,
                 zbuffer, width, None, None,
             );
@@ -111,7 +111,7 @@ pub fn draw_zbuffered_2xssaa<D: DrawTarget<Color = Rgb565>>(
                 pixels: alloc::vec::Vec::new(),
             };
 
-            super::zbuffered::fill_triangle_zbuffered(
+            super::zbuffered::flat::fill_triangle_zbuffered(
                 super_p1,
                 super_p2,
                 super_p3,
@@ -194,7 +194,7 @@ pub fn draw_zbuffered_aa_coverage<D: DrawTarget<Color = Rgb565>>(
             let height = zbuffer.len() / width;
             let mut coverage_buffer = alloc::vec![0u8; width * height];
 
-            super::zbuffered::fill_triangle_zbuffered(
+            super::zbuffered::flat::fill_triangle_zbuffered(
                 points[0], points[1], points[2], depths[0], depths[1], depths[2], color, fb,
                 zbuffer, width, None, None,
             );

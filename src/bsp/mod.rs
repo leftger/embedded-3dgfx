@@ -468,9 +468,8 @@ impl K3dengine {
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        use crate::pipeline::rasterize::draw::textured::{
-            draw_zbuffered_lightmapped_mapped, draw_zbuffered_with_textures_mapped,
-        };
+        use crate::pipeline::rasterize::draw::textured::draw_zbuffered_with_textures_mapped;
+        use crate::pipeline::rasterize::draw::textured::lightmap::draw_zbuffered_lightmapped_mapped;
         use crate::pipeline::renderer::DirtyRegion;
 
         frame.validate()?;
@@ -587,7 +586,7 @@ impl K3dengine {
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        use crate::pipeline::rasterize::draw::textured::draw_zbuffered_lightmapped_mapped;
+        use crate::pipeline::rasterize::draw::textured::lightmap::draw_zbuffered_lightmapped_mapped;
 
         frame.validate()?;
         crate::clear_zbuffer(frame.zbuffer, crate::Z_MAX_VALUE);
@@ -685,7 +684,7 @@ impl K3dengine {
         D: DrawTarget<Color = Rgb565> + OriginDimensions,
         D::Error: Debug,
     {
-        use crate::pipeline::rasterize::draw::textured::draw_bsp_coverage;
+        use crate::pipeline::rasterize::draw::textured::coverage::draw_bsp_coverage;
 
         coverage.clear();
         scratch.mark_new_frame();
