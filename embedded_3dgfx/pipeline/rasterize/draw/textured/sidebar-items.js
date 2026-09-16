@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["draw_bsp_coverage","draw_zbuffered_lightmapped","draw_zbuffered_lightmapped_mapped","draw_zbuffered_with_textures","draw_zbuffered_with_textures_mapped","draw_zbuffered_with_textures_state","fill_triangle_zbuffered_textured_gouraud"]};
+window.SIDEBAR_ITEMS = {"fn":["draw_zbuffered_with_textures","draw_zbuffered_with_textures_mapped","draw_zbuffered_with_textures_state"],"mod":["coverage","gouraud","lightmap"]};

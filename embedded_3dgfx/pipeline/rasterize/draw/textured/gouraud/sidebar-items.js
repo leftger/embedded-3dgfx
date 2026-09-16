@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fill_triangle_zbuffered_textured_gouraud"]};

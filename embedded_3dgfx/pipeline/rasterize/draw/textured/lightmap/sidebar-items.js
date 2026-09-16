@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["draw_zbuffered_lightmapped","draw_zbuffered_lightmapped_mapped"]};

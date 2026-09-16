@@ -493,7 +493,7 @@
 <a href=#493 id=493 data-nosnippet>493</a>            .count();
 <a href=#494 id=494 data-nosnippet>494</a>    }
 <a href=#495 id=495 data-nosnippet>495</a>    <span class="kw">let </span>state = engine.raster_state(frame.width, frame.height);
-<a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">crate</span>::pipeline::renderer::execute_commands(fb, frame, commands, <span class="kw-2">&amp;</span>state)
+<a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">crate</span>::pipeline::renderer::execute::execute_commands(fb, frame, commands, <span class="kw-2">&amp;</span>state)
 <a href=#497 id=497 data-nosnippet>497</a>}
 <a href=#498 id=498 data-nosnippet>498</a>
 <a href=#499 id=499 data-nosnippet>499</a><span class="attr">#[cfg(feature = <span class="string">"textured"</span>)]
@@ -525,7 +525,7 @@
 <a href=#525 id=525 data-nosnippet>525</a>            .count();
 <a href=#526 id=526 data-nosnippet>526</a>    }
 <a href=#527 id=527 data-nosnippet>527</a>    <span class="kw">let </span>state = engine.raster_state(frame.width, frame.height);
-<a href=#528 id=528 data-nosnippet>528</a>    <span class="kw">crate</span>::pipeline::renderer::execute_commands_textured(
+<a href=#528 id=528 data-nosnippet>528</a>    <span class="kw">crate</span>::pipeline::renderer::execute::execute_commands_textured(
 <a href=#529 id=529 data-nosnippet>529</a>        fb,
 <a href=#530 id=530 data-nosnippet>530</a>        frame,
 <a href=#531 id=531 data-nosnippet>531</a>        commands,
@@ -546,7 +546,7 @@
 <a href=#546 id=546 data-nosnippet>546</a>    D::Error: Debug,
 <a href=#547 id=547 data-nosnippet>547</a>{
 <a href=#548 id=548 data-nosnippet>548</a>    <span class="kw">let </span>state = engine.raster_state(frame.width, frame.height);
-<a href=#549 id=549 data-nosnippet>549</a>    <span class="kw">crate</span>::pipeline::renderer::execute_commands_tiled::&lt;D, MAX, BIN_CAP&gt;(
+<a href=#549 id=549 data-nosnippet>549</a>    <span class="kw">crate</span>::pipeline::renderer::execute::execute_commands_tiled::&lt;D, MAX, BIN_CAP&gt;(
 <a href=#550 id=550 data-nosnippet>550</a>        fb, frame, commands, tile, <span class="kw-2">&amp;</span>state,
 <a href=#551 id=551 data-nosnippet>551</a>    )
 <a href=#552 id=552 data-nosnippet>552</a>}
