@@ -266,6 +266,21 @@ python3 .github/scripts/check_internal_imports.py   # run before pushing
 The check runs as the `import-policy` CI job. `tests/`, `examples/` and
 `benches/` are consumers of the public API and may use the facades freely.
 
+### Feature gate policy
+
+A module reached only through `#[cfg(feature = "F")] mod x;` cannot be compiled
+without `F`, so a `#[cfg(feature = "F")]` inside it does nothing. Those gates
+read as if they mattered and hide which ones are load-bearing, so they are
+rejected:
+
+```bash
+python3 .github/scripts/check_feature_gates.py   # run before pushing
+```
+
+The check runs as the `feature-gate-policy` CI job. It only reports gates that
+are *provably* redundant — `any(...)` and `not(...)` establish nothing, and a
+gate that still constrains a second feature is kept.
+
 ## License
 
 Dual-licensed under **MIT OR Apache-2.0**. See [`LICENSE-MIT`](./LICENSE-MIT), [`LICENSE-APACHE`](./LICENSE-APACHE), and [`NOTICE`](./NOTICE).

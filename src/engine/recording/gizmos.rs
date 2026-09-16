@@ -6,7 +6,6 @@ use crate::engine::K3dengine;
 use crate::error::RenderError;
 use crate::pipeline::command_buffer::{CommandBuffer, RenderCommand};
 
-#[cfg(feature = "gizmos")]
 pub(crate) fn record_aabb_gizmo<const MAX: usize>(
     engine: &K3dengine,
     aabb: &crate::pipeline::vertex::bounds::Aabb,
@@ -42,7 +41,6 @@ pub(crate) fn record_aabb_gizmo<const MAX: usize>(
     }
 }
 
-#[cfg(feature = "gizmos")]
 pub(crate) fn record_frustum_gizmo<const MAX: usize>(
     engine: &K3dengine,
     color: Rgb565,
