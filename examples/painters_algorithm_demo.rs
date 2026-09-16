@@ -15,14 +15,14 @@
 //! - ESC: Exit
 
 use embedded_3dgfx::Z_MAX_VALUE;
-use embedded_3dgfx::command_buffer::{CommandBuffer, RenderCommand};
-use embedded_3dgfx::draw::draw;
 use embedded_3dgfx::engine::K3dengine;
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
 #[cfg(feature = "perfcounter")]
 use embedded_3dgfx::perfcounter::PerformanceCounter;
-use embedded_3dgfx::primitive::DrawPrimitive;
-use embedded_3dgfx::renderer::FrameCtx;
+use embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive;
+use embedded_3dgfx::pipeline::command_buffer::{CommandBuffer, RenderCommand};
+use embedded_3dgfx::pipeline::rasterize::draw::draw;
+use embedded_3dgfx::pipeline::renderer::FrameCtx;
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor, WebColors};
@@ -100,12 +100,9 @@ fn as_painter_primitive(prim: &DrawPrimitive) -> Option<DrawPrimitive> {
         | DrawPrimitive::Line(..)
         | DrawPrimitive::ColoredPoint(..) => Some(prim.clone()),
         // Painter fallback for this demo only supports flat/gouraud primitives.
-        DrawPrimitive::TexturedTriangle { .. }
-        | DrawPrimitive::TexturedTriangleWithDepth { .. }
-        | DrawPrimitive::TexturedGouraudTriangleWithDepth { .. }
-        | DrawPrimitive::TranslucentTriangleWithDepth { .. }
-        | DrawPrimitive::ScreenDoorTriangleWithDepth { .. }
-        | DrawPrimitive::LightmappedTriangle { .. } => None,
+        // `DrawPrimitive` is `#[non_exhaustive]`: new variants default to "not
+        // supported by the painter path" rather than breaking this demo.
+        _ => None,
     }
 }
 
@@ -349,7 +346,12 @@ fn main() {
 
             triangle_count = commands
                 .iter()
-                .filter(|c| matches!(c, embedded_3dgfx::command_buffer::RenderCommand::Draw(_)))
+                .filter(|c| {
+                    matches!(
+                        c,
+                        embedded_3dgfx::pipeline::command_buffer::RenderCommand::Draw(_)
+                    )
+                })
                 .count();
         }
 

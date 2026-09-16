@@ -17,12 +17,12 @@
 
 use embedded_3dgfx::Z_MAX_VALUE;
 use embedded_3dgfx::config::apply_default_caps;
-use embedded_3dgfx::draw::draw_zbuffered_with_textures;
 use embedded_3dgfx::engine::K3dengine;
-use embedded_3dgfx::mesh::{Geometry, K3dMesh};
 #[cfg(feature = "perfcounter")]
 use embedded_3dgfx::perfcounter::PerformanceCounter;
-use embedded_3dgfx::texture::{Texture, TextureManager};
+use embedded_3dgfx::pipeline::rasterize::draw::draw_zbuffered_with_textures;
+use embedded_3dgfx::pipeline::rasterize::texture::{Texture, TextureManager};
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh};
 use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, WebColors};
@@ -286,7 +286,7 @@ fn main() {
                             geometry.uvs[face[2]],
                         ];
 
-                        use embedded_3dgfx::primitive::DrawPrimitive;
+                        use embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive;
                         draw_zbuffered_with_textures(
                             DrawPrimitive::TexturedTriangleWithDepth {
                                 points: [p1.xy(), p2.xy(), p3.xy()],

@@ -11,27 +11,29 @@ use embedded_3dgfx::Z_MAX_VALUE;
 use embedded_3dgfx::bsp::BspTelemetry;
 use embedded_3dgfx::bsp::builder::{RoomSpec, build_room_strip};
 use embedded_3dgfx::bsp::scratch::BspScratch;
-use embedded_3dgfx::command_buffer::CommandBuffer;
 use embedded_3dgfx::config::apply_default_caps;
-use embedded_3dgfx::draw::{
-    DitherConfig, FogConfig, draw_zbuffered, draw_zbuffered_with_effects,
-    draw_zbuffered_with_textures,
-};
-use embedded_3dgfx::lights::PointLight;
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_3dgfx::particles::{ParticleSpawn, ParticleSystem};
 #[cfg(feature = "physics")]
 use embedded_3dgfx::physics::{Collider, PhysicsWorld, RigidBody, sync_body_to_mesh};
-use embedded_3dgfx::primitive::DrawPrimitive;
-use embedded_3dgfx::renderer::FrameCtx;
-use embedded_3dgfx::retro::AnimatedPalette;
-use embedded_3dgfx::shader::{
+use embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive;
+use embedded_3dgfx::pipeline::command_buffer::CommandBuffer;
+use embedded_3dgfx::pipeline::effects::{DitherConfig, FogConfig};
+use embedded_3dgfx::pipeline::rasterize::draw::{
+    draw_zbuffered, draw_zbuffered_with_effects, draw_zbuffered_with_textures,
+};
+use embedded_3dgfx::pipeline::rasterize::texture::{Texture, TextureManager};
+use embedded_3dgfx::pipeline::renderer::FrameCtx;
+use embedded_3dgfx::pipeline::shade::lights::PointLight;
+use embedded_3dgfx::pipeline::shade::retro::AnimatedPalette;
+use embedded_3dgfx::pipeline::shade::shader::{
     FlatColorShader, FragmentShader, WaterReflectConfig, WaterReflectShader,
 };
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
 #[cfg(feature = "physics")]
 use embedded_3dgfx::softbody::SoftBody;
-use embedded_3dgfx::texture::{Texture, TextureManager};
-use embedded_3dgfx::{engine::K3dengine, retro::RetroStyle, retro::SkyConfig};
+use embedded_3dgfx::{
+    engine::K3dengine, pipeline::shade::retro::RetroStyle, pipeline::shade::retro::SkyConfig,
+};
 
 use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::prelude::Primitive;

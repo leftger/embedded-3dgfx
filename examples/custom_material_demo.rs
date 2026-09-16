@@ -1,5 +1,6 @@
 use embedded_3dgfx::ZDepth;
-use embedded_3dgfx::shader::{DitherConfig, DitherShader, FogConfig, FogShader, FragmentShader};
+use embedded_3dgfx::pipeline::effects::{DitherConfig, FogConfig};
+use embedded_3dgfx::pipeline::shade::shader::{DitherShader, FogShader, FragmentShader};
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};
 
 /// A custom user-defined material shader that generates a procedural wave pattern.

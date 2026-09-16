@@ -6,13 +6,15 @@
 //! 3. Integrated Screen-Space Picking (`execute_commands_with_picking`).
 
 use embedded_3dgfx::Z_MAX_VALUE;
-use embedded_3dgfx::command_buffer::CommandBuffer;
 use embedded_3dgfx::config::apply_default_caps;
 use embedded_3dgfx::engine::K3dengine;
-use embedded_3dgfx::hud::{HudElement, HudLayer, Sprite2D};
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_3dgfx::renderer::{FrameCtx, PickQuery, PickResult, execute_commands_with_picking};
-use embedded_3dgfx::retro::TextureLodConfig;
+use embedded_3dgfx::pipeline::command_buffer::CommandBuffer;
+use embedded_3dgfx::pipeline::output::hud::{HudElement, HudLayer, Sprite2D};
+use embedded_3dgfx::pipeline::renderer::{
+    FrameCtx, PickQuery, PickResult, execute_commands_with_picking,
+};
+use embedded_3dgfx::pipeline::shade::retro::TextureLodConfig;
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::{Rgb565, RgbColor};

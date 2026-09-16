@@ -27,6 +27,10 @@ categories = [
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [features]
 # Slim default for MCU consumers. Desktop examples should opt into `std` / AA explicitly.
 default = ["row_width_240"]
@@ -168,7 +172,7 @@ required-features = ["std", "lighting"]
 
 [[example]]
 name = "fog_dithering_demo"
-required-features = ["std"]
+required-features = ["std", "lighting"]
 
 [[example]]
 name = "freedoom1_bsp"
@@ -181,6 +185,20 @@ required-features = ["std", "raycast", "textured", "lighting"]
 [[example]]
 name = "gouraud_demo"
 required-features = ["std", "lighting"]
+
+# Application-integration templates (see docs/app-integration.md).
+# Runnable headlessly with E3DGFX_EXAMPLE_FRAMES=<n>.
+[[example]]
+name = "integration_minimal"
+required-features = ["std"]
+
+[[example]]
+name = "integration_app_loop"
+required-features = ["std"]
+
+[[example]]
+name = "integration_custom_backend"
+required-features = ["std"]
 
 [[example]]
 name = "jelly_cube_demo"

@@ -18,13 +18,15 @@ use embedded_3dgfx::Z_MAX_VALUE;
 use embedded_3dgfx::bsp::BspTelemetry;
 use embedded_3dgfx::bsp::builder::{RoomSpec, build_room_strip};
 use embedded_3dgfx::bsp::scratch::BspScratch;
-use embedded_3dgfx::command_buffer::CommandBuffer;
 use embedded_3dgfx::config::apply_default_caps;
 #[cfg(feature = "perfcounter")]
 use embedded_3dgfx::perfcounter::PerformanceCounter;
-use embedded_3dgfx::renderer::FrameCtx;
-use embedded_3dgfx::texture::{Texture, TextureManager};
-use embedded_3dgfx::{engine::K3dengine, retro::RetroStyle, retro::StippleMode};
+use embedded_3dgfx::pipeline::command_buffer::CommandBuffer;
+use embedded_3dgfx::pipeline::rasterize::texture::{Texture, TextureManager};
+use embedded_3dgfx::pipeline::renderer::FrameCtx;
+use embedded_3dgfx::{
+    engine::K3dengine, pipeline::shade::retro::RetroStyle, pipeline::shade::retro::StippleMode,
+};
 use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;
 use embedded_graphics_core::pixelcolor::Rgb565;

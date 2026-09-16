@@ -16,8 +16,10 @@ A `no_std` 3D graphics and physics engine for embedded systems: software rasteri
 
 ## Highlights
 
-- **Modular Architecture** — explicit `raster`, `shader`, `shapes`, `camera_controller`, `navmesh`, `absm`, and `input` namespaces
-- **Zero-Cost `FragmentShader` Pipeline** — composable decorator shaders (`FogShader`, `DitherShader`, `ScreenTintShader`, `PaletteShader`, `WaterReflectShader`, or custom materials)
+- **A graphics pipeline, spelled out** — five stages (`pipeline::vertex` → `assemble` → `rasterize` → `shade` → `output`), each with a `StageKind` marker and a documented dependency direction, plus a [`prelude`](https://docs.rs/embedded-3dgfx/latest/embedded_3dgfx/prelude/index.html) for the common types
+- **Two raster layers, one config** — the built-in `draw` path (hand-specialised per `RenderMode`, driven by `record`/`execute`) shares its `FogConfig`/`DitherConfig` with a zero-cost `FragmentShader` seam for custom materials and decorators (`FogShader`, `DitherShader`, `ScreenTintShader`, `PaletteShader`, `WaterReflectShader`)
+- **Unified raster state** — `pipeline::rasterize::draw::RasterState` bundles per-pass config (fog, dither, tint, palette, stipple, depth bias), so rasterizers take one borrowed context instead of a wide positional argument tail
+- **One home per type** — no glob re-exports; every type is reached through its owning module, so the public surface is explicit rather than accidental
 - **Record / execute** — traverse once, rasterize from a fixed-capacity command buffer (`PrimitiveHeader` + packed typed descriptors for low RAM footprint)
 - **Rendering** — MVP + frustum/backface cull, Z-buffer, flat/Gouraud/Blinn-Phong, perspective textures, Bayer dither, Reinhard tonemapping, sub-pixel Q16.16 rasterization, lights, particles, LOD, HUD
 - **Physics & Navigation** *(features `physics`, `scene`)* — rigid bodies, joints, soft body, ray primitives, NavMesh A* pathfinding
@@ -73,8 +75,7 @@ embedded-3dgfx = { version = "0.6", features = ["std", "physics"] }
 ## Quick start
 
 ```rust
-use embedded_3dgfx::{engine::K3dengine, mesh::{Geometry, K3dMesh, RenderMode}};
-use nalgebra::Vector3;
+use embedded_3dgfx::prelude::*;
 
 let mut engine = K3dengine::new(320, 240);
 engine.camera.set_position(Vector3::new(0.0, 0.0, 5.0).into());
@@ -83,10 +84,66 @@ let geometry = Geometry { vertices: &CUBE_VERTS, faces: &CUBE_FACES, /* ... */ }
 let mut mesh = K3dMesh::new(geometry);
 mesh.set_render_mode(RenderMode::Lines);
 
-let mut commands = embedded_3dgfx::command_buffer::CommandBuffer::<512>::new();
+let mut commands = CommandBuffer::<512>::new();
 engine.record(core::iter::once(&mesh), &mut commands, None).unwrap();
 engine.execute(&mut display, &mut frame_ctx, &commands, None).unwrap();
 ```
+
+### Custom raster draws (`RasterState`)
+
+Everything the engine applies to a frame — fog, dither, screen tint, palette
+quantization, stipple, depth bias — is lowered once into a
+[`RasterState`](https://docs.rs/embedded-3dgfx/latest/embedded_3dgfx/pipeline/rasterize/draw/struct.RasterState.html):
+
+```rust
+use embedded_3dgfx::pipeline::rasterize::draw::draw_zbuffered_with_state;
+
+let state = engine.raster_state(320, 240);
+draw_zbuffered_with_state(primitive, &mut fb, &mut zbuffer, &state);
+```
+
+## Architecture: a five-stage pipeline
+
+The crate is organised as a graphics pipeline. Each stage owns one module and
+consumes the previous stage's output:
+
+| # | Stage | Module | Input → output |
+|---|-------|--------|----------------|
+| 1 | `Stage::Vertex`    | `pipeline::vertex`    | model-space mesh → clip-space vertices |
+| 2 | `Stage::Assemble`  | `pipeline::assemble`  | clip-space vertices → screen-space `DrawPrimitive` |
+| 3 | `Stage::Rasterize` | `pipeline::rasterize` | screen primitives → covered pixels |
+| 4 | `Stage::Shade`     | `pipeline::shade`     | fragments → `Rgb565` colours |
+| 5 | `Stage::Output`    | `pipeline::output`    | framebuffer → presented frame |
+
+`pipeline::command_buffer` is the transport between the record half (stages
+1–2) and the execute half (stages 3–5); `pipeline::renderer` drives the execute
+half, and `engine` is the frame driver on top. Shared per-pass configuration
+lives in `pipeline::effects`.
+
+The dependency direction is enforced by review, not the compiler: a stage may
+depend on lower-numbered stages, `effects`, and the crate-root core types —
+never on a higher-numbered stage. The single exception is that `rasterize`
+invokes the fragment programs defined in `shade`, so `shade` sits *below*
+`rasterize` in dependency order even though it runs afterwards.
+
+Every stage has a `StageKind` marker so the pipeline is queryable at compile
+time (`Camera: Stage::Vertex`, `DrawPrimitive: Stage::Assemble`,
+`RasterState: Stage::Rasterize`, `FlatColorShader: Stage::Shade`,
+`DisplayError: Stage::Output`).
+
+### Module map
+
+| Tree | Contents |
+|------|----------|
+| `pipeline::vertex` | `mesh`, `shapes`, `bounds`, `camera`, `camera_controller`, `view_frustum`, `lod`, `transform` |
+| `pipeline::assemble` | `primitive` (`DrawPrimitive`) |
+| `pipeline::rasterize` | `raster`, `draw`, `coverage`, `texture`, `tilebin` |
+| `pipeline::shade` | `shader`, `retro`, `dither`, `lights` |
+| `pipeline::output` | `display_backend`, `swapchain`, `completion`, `hud` |
+| `pipeline::{command_buffer, renderer, effects}` | record/execute transport, execute driver, shared config |
+| `engine` | `K3dengine` frame driver (`record` / `execute`) |
+| core | `color`, `config`, `error`, `simd_dsp`, plus the `prelude` |
+| subsystems | `physics`, `raycast`, `bsp`, `navmesh`, `skeleton`, `animation`, `absm`, `tween`, `scene_format`, `scene_stream`, … |
 
 ### Geometry & Surface Normals for Lighting
 
@@ -114,7 +171,7 @@ More patterns (particles, lights, fog, physics, skeleton, soft body, async prese
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `row_width_*` | `240` | Row-buffer width (`96` / `160` / `240` / `320`, mutually exclusive) |
+| `row_width_*` | `240` | Row-buffer width (`96` / `160` / `240` / `320`). Meant to be mutually exclusive; if a build enables several, the widest wins deterministically |
 | `std` | off | Desktop helpers / `perfcounter` |
 | `lighting` | off | `SolidLightDir` / Gouraud / Blinn / Toon / `SectorBright` + `lights` |
 | `textured` | off | Texture modes + `texture` module (implies `lighting`) |
@@ -170,6 +227,8 @@ Physics: `physics_rolling_ball`, `physics_bouncing_balls`, `physics_pendulum`, `
 
 | Resource | Topic |
 |-----|-------|
+| [`MIGRATION.md`](MIGRATION.md) | Upgrading from the pre-`pipeline` module layout |
+| [`docs/app-integration.md`](docs/app-integration.md) | Adding the engine to your application (with runnable templates) |
 | [`docs/caps-and-telemetry.md`](docs/caps-and-telemetry.md) | Caps, telemetry, CI budgets |
 | [`docs/feature-size.md`](docs/feature-size.md) | Slim vs full flash (`.text`) budgets |
 | [`docs/backend-integration.md`](docs/backend-integration.md) | Board bring-up, memory sizing |
@@ -191,6 +250,21 @@ Git hooks (fmt on commit / push): `./scripts/install-git-hooks.sh`
 ## Contributing
 
 PRs welcome — especially board backends, broad-phase spatial structures, and extra joint / collider types.
+
+### Import policy
+
+Aggregating surfaces — the `prelude` and the per-stage facades such as
+`pipeline::output` — are **public API for downstream crates**. Code inside `src/`
+must not import from them: internal modules name the module that actually
+defines an item, so trimming an aggregator can never silently reshape the
+internals. Glob imports are confined to `#[cfg(test)]` modules.
+
+```bash
+python3 .github/scripts/check_internal_imports.py   # run before pushing
+```
+
+The check runs as the `import-policy` CI job. `tests/`, `examples/` and
+`benches/` are consumers of the public API and may use the facades freely.
 
 ## License
 

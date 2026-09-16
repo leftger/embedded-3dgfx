@@ -11,14 +11,14 @@
 //! Run: `cargo run --example boot_menu --features std`
 
 use embedded_3dgfx::billboard::Billboard;
-use embedded_3dgfx::command_buffer::CommandBuffer;
 use embedded_3dgfx::config::apply_default_caps;
-use embedded_3dgfx::draw::draw_zbuffered_with_textures as draw_tex;
 use embedded_3dgfx::engine::K3dengine;
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
-use embedded_3dgfx::primitive::DrawPrimitive;
-use embedded_3dgfx::renderer::FrameCtx;
-use embedded_3dgfx::texture::{Texture, TextureManager};
+use embedded_3dgfx::pipeline::assemble::primitive::DrawPrimitive;
+use embedded_3dgfx::pipeline::command_buffer::CommandBuffer;
+use embedded_3dgfx::pipeline::rasterize::draw::draw_zbuffered_with_textures as draw_tex;
+use embedded_3dgfx::pipeline::rasterize::texture::{Texture, TextureManager};
+use embedded_3dgfx::pipeline::renderer::FrameCtx;
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_3dgfx::transform_anim::{AnimationPlayer, TransformKeyframe, TransformTrack};
 use embedded_3dgfx::tween::{Easing, Tween, scale_rgb565};
 use embedded_3dgfx::{Z_MAX_VALUE, ZDepth};

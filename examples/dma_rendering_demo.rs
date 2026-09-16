@@ -16,15 +16,15 @@
 //! - ESC: Exit
 
 use embedded_3dgfx::Z_MAX_VALUE;
-use embedded_3dgfx::command_buffer::CommandBuffer;
 use embedded_3dgfx::config::apply_default_caps;
-use embedded_3dgfx::display_backend::SimulatorBackend;
 use embedded_3dgfx::engine::K3dengine;
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
 #[cfg(feature = "perfcounter")]
 use embedded_3dgfx::perfcounter::PerformanceCounter;
-use embedded_3dgfx::renderer::FrameCtx;
-use embedded_3dgfx::swapchain::StandardSwapChain;
+use embedded_3dgfx::pipeline::command_buffer::CommandBuffer;
+use embedded_3dgfx::pipeline::output::display_backend::SimulatorBackend;
+use embedded_3dgfx::pipeline::output::swapchain::StandardSwapChain;
+use embedded_3dgfx::pipeline::renderer::FrameCtx;
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_3dgfx::telemetry::{ExecuteTelemetry, RecordTelemetry};
 use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10};
 use embedded_graphics::text::Text;

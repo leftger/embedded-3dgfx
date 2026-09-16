@@ -1,6 +1,6 @@
 # embedded-3dgfx Examples
 
-This directory contains 31 interactive examples demonstrating the full capabilities of embedded-3dgfx: 3D rendering, retro/BSP workflows, physics, skeletal animation, and soft body dynamics.
+This directory contains 42 examples demonstrating the full capabilities of embedded-3dgfx: 3D rendering, retro/BSP workflows, physics, skeletal animation, and soft body dynamics — plus a set of [integration templates](#-integration-templates) for adding the engine to an existing application.
 
 ## Prerequisites
 
@@ -25,6 +25,59 @@ All examples require the `std` feature:
 
 ```bash
 cargo run --example <name> --features std
+```
+
+Examples rendering larger than 320×240 also need the budget caps lifted:
+
+```bash
+cargo run --example <name> --features "std,desktop-unbounded"
+# or at run time:
+EMBEDDED_3DGFX_CAPS=off cargo run --example <name> --features std
+```
+
+## 🔌 Integration Templates
+
+Start here if you are adding the engine to an existing application. These are
+deliberately minimal and copy-pasteable, unlike the feature demos below. See
+[`docs/app-integration.md`](../docs/app-integration.md) for the full write-up.
+
+#### `integration_minimal` - Bring Your Own Framebuffer
+The smallest complete integration: a ~30-line `DrawTarget` over your own pixel
+slice, one record/execute frame, and no SDL or simulator at all. This is the
+shape you want on a microcontroller. Runs headless.
+
+```bash
+cargo run --example integration_minimal --features std
+```
+
+#### `integration_app_loop` - Application Loop Skeleton
+Owning the loop: fixed-timestep simulation decoupled from frame rate, input
+handling, record-side telemetry, a degradation policy that sheds work instead of
+failing a heavy frame, and a hand-rolled pass drawn with the engine's own
+`RasterState`.
+
+**Controls:** `SPACE` pause · `H` toggle HUD · `R` toggle camera orbit · `ESC` quit
+
+```bash
+cargo run --example integration_app_loop --features std
+```
+
+#### `integration_custom_backend` - Custom Display Backend
+Implements `DisplayBackend` + `DmaTransfer` for a panel and drives a real
+`StandardSwapChain` on top, including the `DisplayError::Busy` back-pressure path
+when the panel is slower than the renderer. The `// TODO(hardware)` comments mark
+where your DMA controller goes.
+
+```bash
+cargo run --example integration_custom_backend --features std
+```
+
+All three integration examples accept `E3DGFX_EXAMPLE_FRAMES=<n>` to exit after
+`n` frames, so they work as headless smoke tests:
+
+```bash
+SDL_VIDEODRIVER=dummy E3DGFX_EXAMPLE_FRAMES=60 \
+  cargo run --example integration_app_loop --features std
 ```
 
 ## 🎨 3D Rendering Examples

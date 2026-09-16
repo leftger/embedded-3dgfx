@@ -15,15 +15,15 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use embedded_3dgfx::Z_MAX_VALUE;
-use embedded_3dgfx::command_buffer::CommandBuffer;
 use embedded_3dgfx::config::apply_default_caps;
-use embedded_3dgfx::lights::PointLight;
-use embedded_3dgfx::mesh::{Geometry, K3dMesh, RenderMode};
 use embedded_3dgfx::particles::{ParticleSpawn, ParticleSystem};
 #[cfg(feature = "perfcounter")]
 use embedded_3dgfx::perfcounter::PerformanceCounter;
-use embedded_3dgfx::renderer::FrameCtx;
-use embedded_3dgfx::{engine::K3dengine, retro::RetroStyle};
+use embedded_3dgfx::pipeline::command_buffer::CommandBuffer;
+use embedded_3dgfx::pipeline::renderer::FrameCtx;
+use embedded_3dgfx::pipeline::shade::lights::PointLight;
+use embedded_3dgfx::pipeline::vertex::mesh::{Geometry, K3dMesh, RenderMode};
+use embedded_3dgfx::{engine::K3dengine, pipeline::shade::retro::RetroStyle};
 
 use embedded_graphics::mono_font::{MonoTextStyle, ascii::FONT_6X10, ascii::FONT_8X13_BOLD};
 use embedded_graphics::pixelcolor::Rgb565;
