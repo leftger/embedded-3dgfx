@@ -8,7 +8,7 @@
 //! Everything heavy is behind cargo features; see the crate README for the
 //! MCU feature recipes. New here? Start with the [`prelude`].
 #![no_std]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(
     clippy::too_many_arguments,
     clippy::type_complexity,

@@ -12,4 +12,4 @@ proc-macro = true
 
 [dependencies]
 stl_io = "0.8.6"
-embedded-3dgfx = { path = "..", version = "0.7.0" }
+embedded-3dgfx = { path = "..", version = "0.7.1" }
