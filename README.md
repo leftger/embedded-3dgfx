@@ -54,13 +54,13 @@ cargo run --release --example screenshots --features "std,lighting,textured,rayc
 ```toml
 [dependencies]
 # Embedded (no_std) — slim default is row_width_240
-embedded-3dgfx = { version = "0.6", default-features = false, features = ["row_width_320", "depth-u16"] }
+embedded-3dgfx = { version = "0.7", default-features = false, features = ["row_width_320", "depth-u16"] }
 
 # Orientation-style lit meshes
-embedded-3dgfx = { version = "0.6", default-features = false, features = ["row_width_320", "depth-u16", "lighting"] }
+embedded-3dgfx = { version = "0.7", default-features = false, features = ["row_width_320", "depth-u16", "lighting"] }
 
 # Desktop / simulator
-embedded-3dgfx = { version = "0.6", features = ["std", "physics"] }
+embedded-3dgfx = { version = "0.7", features = ["std", "physics"] }
 ```
 
 ### MCU feature recipes
@@ -201,7 +201,7 @@ Flash impact of the slim recipes is tracked in [`docs/feature-size.md`](docs/fea
 | `scene-extras` | All of the above |
 
 ```toml
-embedded-3dgfx = { version = "0.6", features = ["std", "scene-extras"] }
+embedded-3dgfx = { version = "0.7", features = ["std", "scene-extras"] }
 ```
 
 ```bash
