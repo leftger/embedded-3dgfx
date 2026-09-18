@@ -27,15 +27,14 @@ jobs:
         with:
           targets: thumbv7em-none-eabihf
 
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
       - name: Publish to crates.io
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          if [ -n "${CARGO_REGISTRY_TOKEN}" ]; then
-            cargo publish --token "${CARGO_REGISTRY_TOKEN}"
-          else
-            cargo publish
-          fi
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
 
       - name: Install arm-none-eabi binutils
         run: sudo apt-get update && sudo apt-get install -y binutils-arm-none-eabi
