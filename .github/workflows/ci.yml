@@ -17,7 +17,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   CARGO_BUILD_JOBS: "1"
-  MSRV: "1.89"
+  MSRV: "1.93"
   NO_STD_TARGET: thumbv7em-none-eabihf
   NO_STD_CARGO_ARGS: "--no-default-features --features row_width_240"
   CLIPPY_ARGS: "--lib --all-features"

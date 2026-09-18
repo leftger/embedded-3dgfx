@@ -5,7 +5,7 @@ version = "0.6.2"
 
 
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.93"
 authors = ["Gerzain Mata <leftger@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/leftger/embedded-3dgfx"
@@ -120,7 +120,7 @@ heapless = "0.9"
 
 embassy-time = { version = "0.5", default-features = false, optional = true }
 embassy-sync = { version = "0.8", default-features = false, optional = true }
-embedded-dsp = { version = "0.4.0", default-features = false, optional = true }
+embedded-dsp = { version = "0.6.0", default-features = false, optional = true }
 
 [lib]
 name = "embedded_3dgfx"
