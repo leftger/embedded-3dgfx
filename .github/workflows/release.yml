@@ -33,9 +33,7 @@ jobs:
       - name: Build offline tools (host)
         run: |
           cargo build --release -p asset_cli
-          cargo build --release -p load_stl
           tar -czf asset_cli-linux-x86_64.tar.gz -C target/release asset_cli
-          tar -czf load_stl-linux-x86_64.tar.gz -C target/release load_stl
 
       - name: Build embedded size-harness ELF (thumbv7em)
         run: |
@@ -59,6 +57,5 @@ jobs:
           generate_release_notes: true
           files: |
             asset_cli-linux-x86_64.tar.gz
-            load_stl-linux-x86_64.tar.gz
             size-harness-thumbv7em.elf
             size-harness-thumbv7em-report.txt
