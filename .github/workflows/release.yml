@@ -27,6 +27,16 @@ jobs:
         with:
           targets: thumbv7em-none-eabihf
 
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -n "${CARGO_REGISTRY_TOKEN}" ]; then
+            cargo publish --token "${CARGO_REGISTRY_TOKEN}"
+          else
+            cargo publish
+          fi
+
       - name: Install arm-none-eabi binutils
         run: sudo apt-get update && sudo apt-get install -y binutils-arm-none-eabi
 
@@ -40,16 +50,6 @@ jobs:
           RUSTFLAGS="-C link-arg=-Tlink.x" cargo build --release -p size-harness --target thumbv7em-none-eabihf
           cp target/thumbv7em-none-eabihf/release/size-harness size-harness-thumbv7em.elf
           arm-none-eabi-size size-harness-thumbv7em.elf > size-harness-thumbv7em-report.txt
-
-      - name: Publish to crates.io
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          if [ -n "${CARGO_REGISTRY_TOKEN}" ]; then
-            cargo publish --token "${CARGO_REGISTRY_TOKEN}"
-          else
-            cargo publish
-          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

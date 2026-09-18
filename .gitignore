@@ -1,3 +1,6 @@
 /target
 .claude
 lcov.info
+*.tar.gz
+*.elf
+*-report.txt
