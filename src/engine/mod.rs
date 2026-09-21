@@ -45,6 +45,15 @@ pub struct K3dengine {
     /// Optional hardware sink for flat-shaded triangles. `None` -- the default --
     /// rasterizes them on the CPU.
     pub(crate) raster_sink: Option<&'static dyn crate::pipeline::rasterize::draw::sink::RasterSink>,
+    /// Whether `record` asks for the z-buffer to be cleared. On by default.
+    ///
+    /// Clearing is a full pass over the z-buffer -- 52,000 words for a 260x200
+    /// viewport, ~150us measured on an STM32N6570-DK, comparable to the whole rest of
+    /// the 3D phase. A scene that emits no depth-carrying primitive does not need it,
+    /// but `record` cannot know that without inspecting primitives it has not emitted
+    /// yet, so the application declares it. Turning this off for a scene that *does*
+    /// depth-test would leave stale depths and produce wrong occlusion.
+    pub(crate) depth_clear_enabled: bool,
     /// Runtime point lights (max 16).  Applied at face-centre granularity
     /// during `record` for mesh geometry and at face level for BSP.
     #[cfg(feature = "lighting")]
@@ -98,6 +107,7 @@ impl K3dengine {
             palette_mode: crate::pipeline::shade::retro::palette::PaletteMode::Off,
             sky: None,
             raster_sink: None,
+            depth_clear_enabled: true,
             #[cfg(feature = "lighting")]
             point_lights: heapless::Vec::new(),
         }
@@ -233,6 +243,17 @@ impl K3dengine {
         sink: Option<&'static dyn crate::pipeline::rasterize::draw::sink::RasterSink>,
     ) {
         self.raster_sink = sink;
+    }
+
+    /// Control whether `record` asks for the z-buffer to be cleared (default: on).
+    ///
+    /// Turn this off only for a scene that emits no depth-carrying primitive -- lines,
+    /// points and plain fills -- where the clear is a full pass over the z-buffer that
+    /// nothing will read. For a scene that does depth-test, leaving it off means stale
+    /// depths and wrong occlusion, which is why this is declared rather than inferred:
+    /// `record` sees the meshes but not the primitives a mesh will emit.
+    pub fn set_depth_clear_enabled(&mut self, enabled: bool) {
+        self.depth_clear_enabled = enabled;
     }
 
     /// Add a dynamic point light. Returns `false` when the 16-light limit is reached.

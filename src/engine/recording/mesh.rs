@@ -18,7 +18,12 @@ where
     MS: IntoIterator<Item = &'a K3dMesh<'a>>,
 {
     commands.clear();
-    commands.push(RenderCommand::ClearDepth(crate::Z_MAX_VALUE))?;
+    // Clearing is a full pass over the z-buffer (52,000 words for a 260x200 viewport,
+    // ~150us measured), and a scene with no depth-carrying primitive never reads it.
+    // The application opts out explicitly -- see `K3dengine::set_depth_clear_enabled`.
+    if engine.depth_clear_enabled {
+        commands.push(RenderCommand::ClearDepth(crate::Z_MAX_VALUE))?;
+    }
     if let Some(caps) = engine.caps {
         caps.validate_framebuffer(engine.width as usize, engine.height as usize)?;
     }
