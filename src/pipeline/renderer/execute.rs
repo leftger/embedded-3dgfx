@@ -4,8 +4,10 @@ use core::fmt::Debug;
 use embedded_graphics_core::{
     Pixel,
     draw_target::DrawTarget,
+    geometry::Size,
     pixelcolor::Rgb565,
     prelude::{OriginDimensions, Point},
+    primitives::Rectangle,
 };
 
 use super::bounds::{clamp_bounds_to_frame, primitive_bounds};
@@ -54,17 +56,20 @@ where
     for c in cmd.iter() {
         match c {
             RenderCommand::ClearColor(color) => {
-                let w = frame.width as i32;
-                let h = frame.height as i32;
+                let w = frame.width as u32;
+                let h = frame.height as u32;
                 let clear_color = apply_post(*color, state.screen_tint, state.palette_mode);
-                for y in 0..h {
-                    for x in 0..w {
-                        fb.draw_iter([Pixel(Point::new(x, y), clear_color)])
-                            .map_err(|_| {
-                                RenderError::InvalidInput("draw target rejected clear write")
-                            })?;
-                    }
-                }
+                // Bulk fill rather than per-pixel: the previous nested loop issued
+                // one `draw_iter` call *per pixel* -- 52,000 calls for a 260x200
+                // viewport, each with its own error handling -- so a clear cost
+                // orders of magnitude more than the pixels it wrote.
+                //
+                // `fill_solid` is a single call, and targets are free to implement
+                // it as a hardware fill (e.g. NemaGFX `nema_fill_rect`). Targets
+                // that do not override it take the default per-pixel path, so this
+                // is a strict improvement either way.
+                fb.fill_solid(&Rectangle::new(Point::zero(), Size::new(w, h)), clear_color)
+                    .map_err(|_| RenderError::InvalidInput("draw target rejected clear write"))?;
             }
             RenderCommand::ClearDepth(value) => {
                 crate::clear_zbuffer(frame.zbuffer, *value);
