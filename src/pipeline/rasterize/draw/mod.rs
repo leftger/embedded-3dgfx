@@ -6,6 +6,7 @@ pub mod blend;
 pub mod fill;
 #[cfg(feature = "fixed-raster")]
 pub mod fixed;
+pub mod sink;
 pub mod state;
 #[cfg(feature = "textured")]
 pub mod textured;
@@ -23,6 +24,7 @@ pub use blend::{
 pub use fill::{draw, fill_triangle};
 #[cfg(feature = "fixed-raster")]
 pub use fixed::{fill_triangle_fixed, fill_triangle_zbuffered_fixed};
+pub use sink::TriangleSink;
 pub use state::RasterState;
 #[cfg(all(feature = "textured", feature = "raycast"))]
 pub use textured::coverage::draw_bsp_coverage;

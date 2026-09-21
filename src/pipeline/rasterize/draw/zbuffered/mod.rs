@@ -77,6 +77,17 @@ pub fn draw_zbuffered_with_state<D: DrawTarget<Color = Rgb565>>(
             }
             let (z1, z2, z3) = resolve_depths(raw_depths, &points, state);
             let [p1, p2, p3] = points;
+
+            // Hardware path: offer the triangle to the sink before rasterizing.
+            // The sink sees the same vertices and the same *resolved* depths the
+            // CPU path would use, so a backend that declines -- buffer full, or a
+            // primitive it cannot represent -- gets an identical CPU fallback.
+            if let Some(sink) = state.triangles {
+                if sink.triangle(&[p1, p2, p3], &[z1, z2, z3], color) {
+                    return;
+                }
+            }
+
             fill_triangle_zbuffered(
                 p1,
                 p2,
@@ -333,6 +344,93 @@ mod tests {
 
         // Center pixel should STILL be red
         assert_eq!(fb.pixels[center_idx], Rgb565::RED);
+    }
+
+    /// Records what it is offered, and can be told to decline.
+    #[derive(Debug)]
+    struct RecordingSink {
+        accept: bool,
+        seen: core::cell::Cell<usize>,
+        last: core::cell::Cell<(nalgebra::Point2<i32>, f32, Rgb565)>,
+    }
+
+    impl RecordingSink {
+        fn new(accept: bool) -> Self {
+            Self {
+                accept,
+                seen: core::cell::Cell::new(0),
+                last: core::cell::Cell::new((nalgebra::Point2::new(0, 0), 0.0, Rgb565::BLACK)),
+            }
+        }
+    }
+
+    impl crate::pipeline::rasterize::draw::sink::TriangleSink for RecordingSink {
+        fn triangle(
+            &self,
+            points: &[nalgebra::Point2<i32>; 3],
+            depths: &[f32; 3],
+            color: Rgb565,
+        ) -> bool {
+            self.seen.set(self.seen.get() + 1);
+            self.last.set((points[0], depths[0], color));
+            self.accept
+        }
+    }
+
+    /// The sink sees the triangle the CPU would have drawn, and its answer
+    /// decides whether the CPU draws it.
+    #[test]
+    fn triangle_sink_takes_over_and_can_decline() {
+        let tri = || DrawPrimitive::ColoredTriangleWithDepth {
+            points: [
+                nalgebra::Point2::new(10, 2),
+                nalgebra::Point2::new(2, 18),
+                nalgebra::Point2::new(18, 18),
+            ],
+            depths: [1.0, 1.0, 1.0],
+            color: Rgb565::RED,
+        };
+        let center = 10 * 20 + 10;
+
+        // Accepted: hardware owns the triangle, so the CPU must not draw it.
+        let mut fb = TestFb::<20, 20>::default();
+        let mut zbuf = [crate::Z_MAX_VALUE; 400];
+        let accepting = RecordingSink::new(true);
+        let state = RasterState::new(20, 20).with_triangle_sink(Some(&accepting));
+        draw_zbuffered_with_state(tri(), &mut fb, &mut zbuf, &state);
+
+        assert_eq!(
+            accepting.seen.get(),
+            1,
+            "triangle should be offered to the sink"
+        );
+        let (first_point, first_depth, color) = accepting.last.get();
+        assert_eq!(first_point, nalgebra::Point2::new(10, 2));
+        assert_eq!(first_depth, 1.0);
+        assert_eq!(color, Rgb565::RED);
+        assert_eq!(
+            fb.pixels[center],
+            Rgb565::BLACK,
+            "an accepted triangle must be left to the hardware"
+        );
+
+        // Declined: the CPU rasterizer must still draw it.
+        let mut fb2 = TestFb::<20, 20>::default();
+        let mut zbuf2 = [crate::Z_MAX_VALUE; 400];
+        let declining = RecordingSink::new(false);
+        let state2 = RasterState::new(20, 20).with_triangle_sink(Some(&declining));
+        draw_zbuffered_with_state(tri(), &mut fb2, &mut zbuf2, &state2);
+
+        assert_eq!(
+            declining.seen.get(),
+            1,
+            "a declining sink is still offered it"
+        );
+        assert_eq!(
+            fb2.pixels[center],
+            Rgb565::RED,
+            "a declined triangle must fall back to the CPU rasterizer"
+        );
     }
 
     #[test]
