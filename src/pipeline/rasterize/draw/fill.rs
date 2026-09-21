@@ -7,6 +7,7 @@ use embedded_graphics_core::prelude::Point;
 use heapless::Vec;
 
 use super::blend::MAX_ROW_WIDTH;
+use super::state::RasterState;
 use crate::pipeline::assemble::primitive::DrawPrimitive;
 
 const FP_SHIFT: i64 = 16;
@@ -259,6 +260,39 @@ fn fill_triangle_screen_clipped<D: DrawTarget<Color = Rgb565>>(
         }
         fill_triangle(t0, t1, t2, color, fb);
     }
+}
+
+/// Draw a single primitive, offering it to a hardware sink first.
+///
+/// Falls back to [`draw`] for anything the sink declines or does not cover, so a
+/// sink only has to implement the primitives it actually accelerates.
+#[inline]
+pub fn draw_with_state<D: DrawTarget<Color = Rgb565>>(
+    primitive: DrawPrimitive,
+    fb: &mut D,
+    state: &RasterState<'_>,
+) where
+    <D as DrawTarget>::Error: Debug,
+{
+    if let Some(sink) = state.sink {
+        match primitive {
+            DrawPrimitive::Line([a, b], color) => {
+                if sink.line(a, b, color) {
+                    return;
+                }
+            }
+            // The un-zbuffered triangle variant carries no depth, so it is offered
+            // with zero depths. A sink that depth-tests should decline this rather
+            // than guess; returning false sends it down the CPU path.
+            DrawPrimitive::ColoredTriangle(points, color) => {
+                if sink.triangle(&points, &[0.0, 0.0, 0.0], color) {
+                    return;
+                }
+            }
+            _ => {}
+        }
+    }
+    draw(primitive, fb);
 }
 
 /// Draw a single 3D primitive directly onto a target.

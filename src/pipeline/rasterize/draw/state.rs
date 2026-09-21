@@ -63,7 +63,7 @@ pub struct RasterState<'a> {
     pub camera_dir: [f32; 3],
     /// Optional hardware sink for flat-shaded triangles. `None` -- the default --
     /// rasterizes on the CPU.
-    pub triangles: Option<&'a dyn crate::pipeline::rasterize::draw::sink::TriangleSink>,
+    pub sink: Option<&'a dyn crate::pipeline::rasterize::draw::sink::RasterSink>,
 }
 
 impl Default for RasterState<'_> {
@@ -81,7 +81,7 @@ impl Default for RasterState<'_> {
             depth_mode: DepthInterpolationMode::Exact,
             sky: None,
             camera_dir: [0.0, 0.0, -1.0],
-            triangles: None,
+            sink: None,
         }
     }
 }
@@ -102,7 +102,7 @@ impl<'a> RasterState<'a> {
             depth_mode: DepthInterpolationMode::Exact,
             sky: None,
             camera_dir: [0.0, 0.0, -1.0],
-            triangles: None,
+            sink: None,
         }
     }
 
@@ -172,16 +172,16 @@ impl<'a> RasterState<'a> {
         self
     }
 
-    /// Route flat-shaded triangles to a hardware sink instead of the CPU
+    /// Route flat-shaded primitives to a hardware sink instead of the CPU
     /// rasterizer. `None` -- the default -- keeps everything on the CPU.
     ///
-    /// [`TriangleSink`]: crate::pipeline::rasterize::draw::sink::TriangleSink
+    /// [`RasterSink`]: crate::pipeline::rasterize::draw::sink::RasterSink
     #[must_use]
-    pub const fn with_triangle_sink(
+    pub const fn with_raster_sink(
         mut self,
-        sink: Option<&'a dyn crate::pipeline::rasterize::draw::sink::TriangleSink>,
+        sink: Option<&'a dyn crate::pipeline::rasterize::draw::sink::RasterSink>,
     ) -> Self {
-        self.triangles = sink;
+        self.sink = sink;
         self
     }
 }

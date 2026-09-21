@@ -82,7 +82,7 @@ pub fn draw_zbuffered_with_state<D: DrawTarget<Color = Rgb565>>(
             // The sink sees the same vertices and the same *resolved* depths the
             // CPU path would use, so a backend that declines -- buffer full, or a
             // primitive it cannot represent -- gets an identical CPU fallback.
-            if let Some(sink) = state.triangles {
+            if let Some(sink) = state.sink {
                 if sink.triangle(&[p1, p2, p3], &[z1, z2, z3], color) {
                     return;
                 }
@@ -196,7 +196,10 @@ pub fn draw_zbuffered_with_state<D: DrawTarget<Color = Rgb565>>(
             );
         }
 
-        _ => super::fill::draw(primitive, fb),
+        // Non-zbuffered primitives -- lines, points, plain triangles -- are offered
+        // to the sink inside `fill::draw_with_state`, which is why the state has to
+        // travel with them.
+        _ => super::fill::draw_with_state(primitive, fb, state),
     }
 }
 
@@ -364,7 +367,7 @@ mod tests {
         }
     }
 
-    impl crate::pipeline::rasterize::draw::sink::TriangleSink for RecordingSink {
+    impl crate::pipeline::rasterize::draw::sink::RasterSink for RecordingSink {
         fn triangle(
             &self,
             points: &[nalgebra::Point2<i32>; 3],
@@ -375,12 +378,18 @@ mod tests {
             self.last.set((points[0], depths[0], color));
             self.accept
         }
+
+        fn line(&self, a: nalgebra::Point2<i32>, _b: nalgebra::Point2<i32>, color: Rgb565) -> bool {
+            self.seen.set(self.seen.get() + 1);
+            self.last.set((a, 0.0, color));
+            self.accept
+        }
     }
 
     /// The sink sees the triangle the CPU would have drawn, and its answer
     /// decides whether the CPU draws it.
     #[test]
-    fn triangle_sink_takes_over_and_can_decline() {
+    fn raster_sink_takes_over_and_can_decline() {
         let tri = || DrawPrimitive::ColoredTriangleWithDepth {
             points: [
                 nalgebra::Point2::new(10, 2),
@@ -396,7 +405,7 @@ mod tests {
         let mut fb = TestFb::<20, 20>::default();
         let mut zbuf = [crate::Z_MAX_VALUE; 400];
         let accepting = RecordingSink::new(true);
-        let state = RasterState::new(20, 20).with_triangle_sink(Some(&accepting));
+        let state = RasterState::new(20, 20).with_raster_sink(Some(&accepting));
         draw_zbuffered_with_state(tri(), &mut fb, &mut zbuf, &state);
 
         assert_eq!(
@@ -418,7 +427,7 @@ mod tests {
         let mut fb2 = TestFb::<20, 20>::default();
         let mut zbuf2 = [crate::Z_MAX_VALUE; 400];
         let declining = RecordingSink::new(false);
-        let state2 = RasterState::new(20, 20).with_triangle_sink(Some(&declining));
+        let state2 = RasterState::new(20, 20).with_raster_sink(Some(&declining));
         draw_zbuffered_with_state(tri(), &mut fb2, &mut zbuf2, &state2);
 
         assert_eq!(
@@ -430,6 +439,54 @@ mod tests {
             fb2.pixels[center],
             Rgb565::RED,
             "a declined triangle must fall back to the CPU rasterizer"
+        );
+    }
+
+    /// Lines take the same two-way path, but through `fill::draw_with_state`
+    /// because they are not z-buffered -- they reach the sink via the match
+    /// catch-all rather than a triangle arm.
+    #[test]
+    fn line_sink_takes_over_and_can_decline() {
+        let line = || {
+            DrawPrimitive::Line(
+                [nalgebra::Point2::new(2, 2), nalgebra::Point2::new(17, 2)],
+                Rgb565::RED,
+            )
+        };
+        let start = 2 * 20 + 2;
+
+        // Accepted: hardware owns the whole line, so no pixel is written.
+        let mut fb = TestFb::<20, 20>::default();
+        let accepting = RecordingSink::new(true);
+        let state = RasterState::new(20, 20).with_raster_sink(Some(&accepting));
+        crate::pipeline::rasterize::draw::fill::draw_with_state(line(), &mut fb, &state);
+
+        assert_eq!(
+            accepting.seen.get(),
+            1,
+            "line should be offered to the sink"
+        );
+        assert_eq!(
+            fb.pixels[start],
+            Rgb565::BLACK,
+            "an accepted line must be left to the hardware"
+        );
+
+        // Declined: the CPU Bresenham path must draw it.
+        let mut fb2 = TestFb::<20, 20>::default();
+        let declining = RecordingSink::new(false);
+        let state2 = RasterState::new(20, 20).with_raster_sink(Some(&declining));
+        crate::pipeline::rasterize::draw::fill::draw_with_state(line(), &mut fb2, &state2);
+
+        assert_eq!(
+            declining.seen.get(),
+            1,
+            "a declining sink is still offered it"
+        );
+        assert_eq!(
+            fb2.pixels[start],
+            Rgb565::RED,
+            "a declined line must fall back to CPU Bresenham"
         );
     }
 

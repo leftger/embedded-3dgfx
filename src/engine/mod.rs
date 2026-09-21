@@ -44,8 +44,7 @@ pub struct K3dengine {
     pub(crate) sky: Option<crate::pipeline::shade::retro::sky::SkyConfig>,
     /// Optional hardware sink for flat-shaded triangles. `None` -- the default --
     /// rasterizes them on the CPU.
-    pub(crate) triangle_sink:
-        Option<&'static dyn crate::pipeline::rasterize::draw::sink::TriangleSink>,
+    pub(crate) raster_sink: Option<&'static dyn crate::pipeline::rasterize::draw::sink::RasterSink>,
     /// Runtime point lights (max 16).  Applied at face-centre granularity
     /// during `record` for mesh geometry and at face level for BSP.
     #[cfg(feature = "lighting")]
@@ -98,7 +97,7 @@ impl K3dengine {
             screen_tint: None,
             palette_mode: crate::pipeline::shade::retro::palette::PaletteMode::Off,
             sky: None,
-            triangle_sink: None,
+            raster_sink: None,
             #[cfg(feature = "lighting")]
             point_lights: heapless::Vec::new(),
         }
@@ -215,7 +214,7 @@ impl K3dengine {
                 let d = self.camera.get_direction();
                 [d.x, d.y, d.z]
             })
-            .with_triangle_sink(self.triangle_sink)
+            .with_raster_sink(self.raster_sink)
     }
 
     /// Route flat-shaded triangles to a hardware sink instead of the CPU
@@ -228,12 +227,12 @@ impl K3dengine {
     /// submission after `execute` returns, which is the only point at which a
     /// whole frame's triangles are known.
     ///
-    /// [`TriangleSink`]: crate::pipeline::rasterize::draw::sink::TriangleSink
-    pub fn set_triangle_sink(
+    /// [`RasterSink`]: crate::pipeline::rasterize::draw::sink::RasterSink
+    pub fn set_raster_sink(
         &mut self,
-        sink: Option<&'static dyn crate::pipeline::rasterize::draw::sink::TriangleSink>,
+        sink: Option<&'static dyn crate::pipeline::rasterize::draw::sink::RasterSink>,
     ) {
-        self.triangle_sink = sink;
+        self.raster_sink = sink;
     }
 
     /// Add a dynamic point light. Returns `false` when the 16-light limit is reached.
