@@ -82,8 +82,16 @@ pub fn draw_zbuffered_with_state<D: DrawTarget<Color = Rgb565>>(
             // The sink sees the same vertices and the same *resolved* depths the
             // CPU path would use, so a backend that declines -- buffer full, or a
             // primitive it cannot represent -- gets an identical CPU fallback.
+            //
+            // Withheld when fog or dither is active, because the CPU path applies
+            // both *inside* `fill_triangle_zbuffered`, below. Offering the triangle
+            // anyway would render it without them: wrong output rather than a slow
+            // one. Screen-door stipple is a separate primitive variant, so it is not
+            // a concern here. A sink able to apply these effects itself cannot yet
+            // say so -- that needs a capability handshake rather than an assumption.
+            let effects_blocked = state.fog.is_some() || state.dither.is_some();
             if let Some(sink) = state.sink {
-                if sink.triangle(&[p1, p2, p3], &[z1, z2, z3], color) {
+                if !effects_blocked && sink.triangle(&[p1, p2, p3], &[z1, z2, z3], color) {
                     return;
                 }
             }
@@ -487,6 +495,47 @@ mod tests {
             fb2.pixels[start],
             Rgb565::RED,
             "a declined line must fall back to CPU Bresenham"
+        );
+    }
+
+    /// Fog (and dither) are applied *inside* the CPU triangle fill, so a
+    /// sink-served triangle would silently render without them. The engine must
+    /// withhold the triangle while either is active -- wrong output is worse than
+    /// a slow path.
+    #[test]
+    fn triangle_is_withheld_from_the_sink_when_fog_is_active() {
+        let mut fb = TestFb::<20, 20>::default();
+        let mut zbuf = [crate::Z_MAX_VALUE; 400];
+        let sink = RecordingSink::new(true);
+        let fog = FogConfig::new(Rgb565::BLACK, 1.0, 100.0);
+        let state = RasterState::new(20, 20)
+            .with_raster_sink(Some(&sink))
+            .with_fog(Some(&fog));
+
+        draw_zbuffered_with_state(
+            DrawPrimitive::ColoredTriangleWithDepth {
+                points: [
+                    nalgebra::Point2::new(10, 2),
+                    nalgebra::Point2::new(2, 18),
+                    nalgebra::Point2::new(18, 18),
+                ],
+                depths: [1.0, 1.0, 1.0],
+                color: Rgb565::RED,
+            },
+            &mut fb,
+            &mut zbuf,
+            &state,
+        );
+
+        assert_eq!(
+            sink.seen.get(),
+            0,
+            "fog must keep the triangle off the sink, on the CPU path"
+        );
+        assert_eq!(
+            fb.pixels[10 * 20 + 10],
+            Rgb565::RED,
+            "and the CPU must still have drawn it"
         );
     }
 
