@@ -1,7 +1,7 @@
 workspace = { members = ["load_stl", "asset_cli", "size_harness"] }
 [package]
 name = "embedded-3dgfx"
-version = "0.7.1"
+version = "0.7.2"
 
 
 edition = "2024"
@@ -335,4 +335,3 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
-
