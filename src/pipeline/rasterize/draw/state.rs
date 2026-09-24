@@ -61,6 +61,9 @@ pub struct RasterState<'a> {
     pub sky: Option<SkyConfig>,
     /// Camera forward direction, used to orient the sky gradient.
     pub camera_dir: [f32; 3],
+    /// Optional hardware sink for flat-shaded triangles. `None` -- the default --
+    /// rasterizes on the CPU.
+    pub sink: Option<&'a dyn crate::pipeline::rasterize::draw::sink::RasterSink>,
 }
 
 impl Default for RasterState<'_> {
@@ -78,6 +81,7 @@ impl Default for RasterState<'_> {
             depth_mode: DepthInterpolationMode::Exact,
             sky: None,
             camera_dir: [0.0, 0.0, -1.0],
+            sink: None,
         }
     }
 }
@@ -98,6 +102,7 @@ impl<'a> RasterState<'a> {
             depth_mode: DepthInterpolationMode::Exact,
             sky: None,
             camera_dir: [0.0, 0.0, -1.0],
+            sink: None,
         }
     }
 
@@ -164,6 +169,19 @@ impl<'a> RasterState<'a> {
     #[must_use]
     pub const fn with_camera_dir(mut self, camera_dir: [f32; 3]) -> Self {
         self.camera_dir = camera_dir;
+        self
+    }
+
+    /// Route flat-shaded primitives to a hardware sink instead of the CPU
+    /// rasterizer. `None` -- the default -- keeps everything on the CPU.
+    ///
+    /// [`RasterSink`]: crate::pipeline::rasterize::draw::sink::RasterSink
+    #[must_use]
+    pub const fn with_raster_sink(
+        mut self,
+        sink: Option<&'a dyn crate::pipeline::rasterize::draw::sink::RasterSink>,
+    ) -> Self {
+        self.sink = sink;
         self
     }
 }
