@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["draw","fill_triangle"]};
+window.SIDEBAR_ITEMS = {"fn":["draw","draw_with_state","fill_triangle"]};

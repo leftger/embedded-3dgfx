@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["aa","blend","fill","fixed","state","textured","zbuffered"]};
+window.SIDEBAR_ITEMS = {"mod":["aa","blend","fill","fixed","sink","state","textured","zbuffered"]};
